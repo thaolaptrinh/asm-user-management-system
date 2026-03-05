@@ -38,7 +38,7 @@ COPY --from=dependencies /app/frontend/node_modules ./frontend/node_modules
 COPY package.json /app/
 COPY frontend/package.json frontend/playwright.config.ts frontend/next.config.ts \
     frontend/tsconfig.json frontend/postcss.config.mjs frontend/biome.json \
-    frontend/next-env.d.ts /app/frontend/
+    /app/frontend/
 COPY frontend/src /app/frontend/src
 COPY frontend/public /app/frontend/public
 COPY frontend/tests /app/frontend/tests
