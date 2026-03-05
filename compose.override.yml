@@ -1,0 +1,152 @@
+services:
+  proxy:
+    profiles:
+      - proxy
+    image: traefik:3.6
+    ports:
+      - "80:80"
+      - "8090:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - --providers.docker
+      - --providers.docker.constraints=Label(`traefik.constraint-label`, `traefik-public`)
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.http.address=:80
+      - --entrypoints.https.address=:443
+      - --accesslog
+      - --log
+      - --log.level=DEBUG
+      - --api
+      - --api.insecure=true
+    networks:
+      - traefik-public
+      - default
+    labels:
+      - traefik.enable=true
+      - traefik.constraint-label=traefik-public
+      - traefik.http.middlewares.https-redirect.contenttype.autodetect=false
+
+  db:
+    restart: "no"
+    ports:
+      - "3307:3306"
+
+  adminer:
+    profiles: []
+    restart: "no"
+    ports:
+      - "8080:8080"
+
+  backend:
+    restart: "no"
+    ports:
+      - "8000:8000"
+    user: "${UID:-1000}:${GID:-1000}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/utils/health-check/')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    command:
+      - fastapi
+      - run
+      - --reload
+      - "app/main.py"
+    volumes:
+      - ./backend/htmlcov:/app/backend/htmlcov
+    environment:
+      SMTP_HOST: "mailcatcher"
+      SMTP_PORT: "1025"
+      SMTP_TLS: "false"
+      EMAILS_FROM_EMAIL: "noreply@example.com"
+    develop:
+      watch:
+        - path: ./backend
+          action: sync
+          target: /app/backend
+          initial_sync: true
+          ignore:
+            - .venv
+            - __pycache__
+            - .pytest_cache
+            - .coverage
+            - htmlcov
+        - path: ./backend/pyproject.toml
+          action: rebuild
+
+  mailcatcher:
+    image: schickling/mailcatcher:latest
+    restart: "no"
+    ports:
+      - "1080:1080"
+      - "1025:1025"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: dev
+    restart: "no"
+    ports:
+      - "3000:3000"
+    environment:
+      - UID=${UID:-1000}
+      - GID=${GID:-1000}
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NODE_ENV=development
+    develop:
+      watch:
+        - path: ./frontend
+          action: sync
+          target: /app/frontend
+          initial_sync: true
+          ignore:
+            - node_modules
+            - .next
+        - path: ./frontend/package.json
+          action: rebuild
+        - path: ./frontend/bun.lock
+          action: rebuild
+
+  playwright:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile.playwright
+      args:
+        - NEXT_PUBLIC_API_URL=http://backend:8000
+        - NODE_ENV=production
+    restart: "no"
+    ipc: host
+    depends_on:
+      backend:
+        condition: service_healthy
+      mailcatcher:
+        condition: service_started
+    ports:
+      - "9323:9323"
+    volumes:
+      - ./frontend:/app/frontend
+      - playwright_node_modules:/app/frontend/node_modules
+      - playwright_next:/app/frontend/.next
+      - ./frontend/blob-report:/app/frontend/blob-report
+      - ./frontend/test-results:/app/frontend/test-results
+      - ./frontend/playwright-report:/app/frontend/playwright-report
+    env_file:
+      - .env
+    environment:
+      - UID=${UID:-1000}
+      - GID=${GID:-1000}
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - MAILCATCHER_HOST=http://mailcatcher:1080
+      - PLAYWRIGHT_HTML_HOST=0.0.0.0
+      - CI=${CI:-false}
+
+volumes:
+  playwright_node_modules:
+  playwright_next:
+
+networks:
+  traefik-public:
+    external: false

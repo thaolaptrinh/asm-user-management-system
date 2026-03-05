@@ -1,0 +1,51 @@
+ARG PLAYWRIGHT_VERSION=v1.58.2
+
+# ── Dependencies ──────────────────────────────────────────────────────
+FROM mcr.microsoft.com/playwright:${PLAYWRIGHT_VERSION}-noble AS dependencies
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends unzip curl && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV BUN_INSTALL=/opt/bun
+RUN curl -fsSL https://bun.sh/install | bash && \
+    chmod -R a+rx /opt/bun
+ENV PATH="/opt/bun/bin:$PATH"
+
+COPY package.json /app/
+COPY frontend/package.json /app/frontend/
+
+WORKDIR /app/frontend
+RUN bun install --frozen-lockfile
+RUN bunx playwright install --with-deps chromium firefox webkit
+
+# ── Runner ────────────────────────────────────────────────────────────
+FROM mcr.microsoft.com/playwright:${PLAYWRIGHT_VERSION}-noble AS runner
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gosu && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=dependencies /opt/bun /opt/bun
+ENV PATH="/opt/bun/bin:$PATH"
+
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=dependencies /app/frontend/node_modules ./frontend/node_modules
+COPY package.json /app/
+COPY frontend/package.json frontend/playwright.config.ts frontend/next.config.ts \
+    frontend/tsconfig.json frontend/postcss.config.mjs frontend/biome.json \
+    frontend/next-env.d.ts /app/frontend/
+COPY frontend/src /app/frontend/src
+COPY frontend/public /app/frontend/public
+COPY frontend/tests /app/frontend/tests
+COPY frontend/scripts/playwright-entrypoint.sh /app/frontend/scripts/playwright-entrypoint.sh
+
+WORKDIR /app/frontend
+EXPOSE 3000
+
+ENTRYPOINT ["bash", "/app/frontend/scripts/playwright-entrypoint.sh"]
+CMD ["bun", "playwright", "test"]
