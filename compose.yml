@@ -21,7 +21,7 @@ services:
   # ── Infrastructure ──────────────────────────────────────────────────
 
   db:
-    image: mysql:8.0
+    image: mysql:9.6
     restart: always
     volumes:
       - app-db-data:/var/lib/mysql
