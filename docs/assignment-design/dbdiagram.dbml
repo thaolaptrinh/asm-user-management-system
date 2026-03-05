@@ -1,0 +1,93 @@
+Project UsersManagement {
+  database_type: 'MySQL'
+}
+
+Table users {
+  id             char(36)     [pk, default: `UUID()`]
+  name           varchar(100) [not null]
+  email          varchar(255) [not null]
+  password_hash  varchar(255) [not null]
+  is_active      boolean      [not null, default: false]
+  is_super_admin boolean      [not null, default: false]
+  created_at     timestamp    [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at     timestamp    [not null, default: `CURRENT_TIMESTAMP`]
+  deleted_at     timestamp    [null]
+
+  indexes {
+    email      [unique, name: 'uq_users_email']
+    deleted_at [name: 'idx_users_deleted_at']
+    is_active  [name: 'idx_users_is_active']
+  }
+}
+
+Table totp_secrets {
+  user_id     char(36)    [pk, ref: > users.id]
+  secret      varchar(64) [not null, note: 'Base32 encoded secret']
+  algorithm   varchar(10) [not null, default: 'SHA1', note: 'SHA1/SHA256/SHA512']
+  digits      tinyint     [not null, default: 6, note: '6 or 8']
+  period      tinyint     [not null, default: 30, note: 'seconds']
+  is_verified boolean     [not null, default: false]
+  last_used_at timestamp  [null]
+  created_at  timestamp   [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at  timestamp   [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table totp_recovery_codes {
+  user_id    char(36)  [not null, ref: > users.id]
+  code_hash  char(60)  [not null, note: 'bcrypt hashed recovery code']
+  used_at    timestamp [null, note: 'null = not used yet']
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (user_id, code_hash) [pk]
+    used_at  [name: 'idx_recovery_used_at']
+  }
+}
+
+Table audit_logs {
+  id          bigint       [pk, increment]
+  user_id     char(36)     [null, ref: > users.id]
+  action      varchar(100) [not null, note: 'LOGIN_SUCCESS / LOGIN_FAILED / TOTP_FAILED / USER_DELETED / USER_CREATED / ...']
+  target_type varchar(50)  [null, note: 'users / totp_secrets']
+  target_id   char(36)     [null]
+  ip_address  varchar(45)  [null]
+  user_agent  varchar(512) [null]
+  status      varchar(20)  [not null, default: 'SUCCESS', note: 'SUCCESS / FAILED']
+  meta        json         [null]
+  created_at  timestamp    [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    user_id    [name: 'idx_audit_user_id']
+    action     [name: 'idx_audit_action']
+    status     [name: 'idx_audit_status']
+    created_at [name: 'idx_audit_created_at']
+  }
+}
+
+Table refresh_tokens {
+  id          char(36)     [pk, note: 'UUID']
+  user_id     char(36)     [not null, ref: > users.id]
+  token_hash  varchar(255) [not null, note: 'SHA256 hash of refresh token']
+  expires_at  timestamp    [not null, note: 'Token expiration (30 days)']
+  revoked_at  timestamp    [null, note: 'Revocation timestamp']
+  created_at  timestamp    [not null, default: `CURRENT_TIMESTAMP`]
+  last_used_at timestamp   [null, note: 'Last used for refresh']
+  device_info json         [null, note: 'Browser, OS, IP']
+
+  indexes {
+    (user_id, revoked_at) [name: 'idx_user_active']
+    expires_at [name: 'idx_expires_at']
+    token_hash [name: 'idx_token_hash']
+  }
+}
+
+Table password_reset_tokens {
+  user_id    char(36)     [pk, ref: > users.id]
+  token_hash varchar(255) [not null, note: 'SHA256 hash of reset token']
+  expires_at timestamp    [not null, note: 'Token expiration (30 minutes)']
+
+  indexes {
+    token_hash [name: 'idx_reset_token_hash']
+    expires_at [name: 'idx_reset_expires_at']
+  }
+}
