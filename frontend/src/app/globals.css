@@ -1,0 +1,127 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Tailwind v4: dark mode theo class (next-themes thêm class "dark" vào html) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.145 0 0);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.145 0 0);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.145 0 0);
+  --color-primary: oklch(0.5982 0.10687 182.4689);
+  --color-primary-foreground: oklch(0.985 0 0);
+  --color-secondary: oklch(0.97 0 0);
+  --color-secondary-foreground: oklch(0.205 0 0);
+  --color-muted: oklch(0.97 0 0);
+  --color-muted-foreground: oklch(0.556 0 0);
+  --color-accent: oklch(0.97 0 0);
+  --color-accent-foreground: oklch(0.205 0 0);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-border: oklch(0.922 0 0);
+  --color-input: oklch(0.922 0 0);
+  --color-ring: oklch(0.708 0 0);
+  --color-chart-1: oklch(0.646 0.222 41.116);
+  --color-chart-2: oklch(0.6 0.118 184.704);
+  --color-chart-3: oklch(0.398 0.07 227.392);
+  --color-chart-4: oklch(0.828 0.189 84.429);
+  --color-chart-5: oklch(0.769 0.188 70.08);
+  --color-sidebar: oklch(0.985 0 0);
+  --color-sidebar-foreground: oklch(0.145 0 0);
+  --color-sidebar-primary: oklch(0.5982 0.10687 182.4689);
+  --color-sidebar-primary-foreground: oklch(0.985 0 0);
+  --color-sidebar-accent: oklch(0.97 0 0);
+  --color-sidebar-accent-foreground: oklch(0.205 0 0);
+  --color-sidebar-border: oklch(0.922 0 0);
+  --color-sidebar-ring: oklch(0.708 0 0);
+
+  --color-dark-background: oklch(0.145 0 0);
+  --color-dark-foreground: oklch(0.985 0 0);
+  --color-dark-card: oklch(0.205 0 0);
+  --color-dark-card-foreground: oklch(0.985 0 0);
+  --color-dark-popover: oklch(0.205 0 0);
+  --color-dark-popover-foreground: oklch(0.985 0 0);
+  --color-dark-primary: oklch(0.65 0.10687 182.4689);
+  --color-dark-primary-foreground: oklch(0.985 0 0);
+  --color-dark-secondary: oklch(0.269 0 0);
+  --color-dark-secondary-foreground: oklch(0.985 0 0);
+  --color-dark-muted: oklch(0.269 0 0);
+  --color-dark-muted-foreground: oklch(0.708 0 0);
+  --color-dark-accent: oklch(0.269 0 0);
+  --color-dark-accent-foreground: oklch(0.985 0 0);
+  --color-dark-destructive: oklch(0.704 0.191 22.216);
+  --color-dark-border: oklch(1 0 0 / 10%);
+  --color-dark-input: oklch(1 0 0 / 15%);
+  --color-dark-ring: oklch(0.556 0 0);
+  --color-dark-chart-1: oklch(0.488 0.243 264.376);
+  --color-dark-chart-2: oklch(0.696 0.17 162.48);
+  --color-dark-chart-3: oklch(0.769 0.188 70.08);
+  --color-dark-chart-4: oklch(0.627 0.265 303.9);
+  --color-dark-chart-5: oklch(0.645 0.246 16.439);
+  --color-dark-sidebar: oklch(0.205 0 0);
+  --color-dark-sidebar-foreground: oklch(0.985 0 0);
+  --color-dark-sidebar-primary: oklch(0.65 0.10687 182.4689);
+  --color-dark-sidebar-primary-foreground: oklch(0.985 0 0);
+  --color-dark-sidebar-accent: oklch(0.269 0 0);
+  --color-dark-sidebar-accent-foreground: oklch(0.985 0 0);
+  --color-dark-sidebar-border: oklch(1 0 0 / 10%);
+  --color-dark-sidebar-ring: oklch(0.556 0 0);
+}
+
+:root {
+  --radius: 0.625rem;
+}
+
+/* Dark mode: override theme variables khi có class .dark (next-themes gắn lên html) */
+@layer theme {
+  .dark {
+    --color-background: var(--color-dark-background);
+    --color-foreground: var(--color-dark-foreground);
+    --color-card: var(--color-dark-card);
+    --color-card-foreground: var(--color-dark-card-foreground);
+    --color-popover: var(--color-dark-popover);
+    --color-popover-foreground: var(--color-dark-popover-foreground);
+    --color-primary: var(--color-dark-primary);
+    --color-primary-foreground: var(--color-dark-primary-foreground);
+    --color-secondary: var(--color-dark-secondary);
+    --color-secondary-foreground: var(--color-dark-secondary-foreground);
+    --color-muted: var(--color-dark-muted);
+    --color-muted-foreground: var(--color-dark-muted-foreground);
+    --color-accent: var(--color-dark-accent);
+    --color-accent-foreground: var(--color-dark-accent-foreground);
+    --color-destructive: var(--color-dark-destructive);
+    --color-border: var(--color-dark-border);
+    --color-input: var(--color-dark-input);
+    --color-ring: var(--color-dark-ring);
+    --color-chart-1: var(--color-dark-chart-1);
+    --color-chart-2: var(--color-dark-chart-2);
+    --color-chart-3: var(--color-dark-chart-3);
+    --color-chart-4: var(--color-dark-chart-4);
+    --color-chart-5: var(--color-dark-chart-5);
+    --color-sidebar: var(--color-dark-sidebar);
+    --color-sidebar-foreground: var(--color-dark-sidebar-foreground);
+    --color-sidebar-primary: var(--color-dark-sidebar-primary);
+    --color-sidebar-primary-foreground: var(
+      --color-dark-sidebar-primary-foreground
+    );
+    --color-sidebar-accent: var(--color-dark-sidebar-accent);
+    --color-sidebar-accent-foreground: var(
+      --color-dark-sidebar-accent-foreground
+    );
+    --color-sidebar-border: var(--color-dark-sidebar-border);
+    --color-sidebar-ring: var(--color-dark-sidebar-ring);
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+}

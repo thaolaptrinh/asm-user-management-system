@@ -1,0 +1,13 @@
+.vscode/*
+!.vscode/extensions.json
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+.venv/
+.ruff_cache/
+
+# env files
+!.env.example
+.env*

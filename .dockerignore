@@ -1,0 +1,50 @@
+# Version control and IDE
+.git
+.gitignore
+.cursor
+.idea
+.vscode
+*.swp
+*.swo
+
+# Dependencies
+node_modules
+frontend/node_modules
+**/.venv
+**/venv
+
+# Build artifacts
+frontend/.next
+frontend/out
+frontend/coverage
+frontend/test-results
+frontend/blob-report
+frontend/playwright-report
+backend/htmlcov
+**/__pycache__
+**/*.pyc
+**/.mypy_cache
+**/.ruff_cache
+**/.coverage
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+
+# Docs
+docs
+*.md
+!frontend/README.md
+!backend/README.md
+
+# CI
+.github
+
+# OS and misc
+.DS_Store
+*.log
+.parcel-cache
+.turbo
+.tmp
+.temp
