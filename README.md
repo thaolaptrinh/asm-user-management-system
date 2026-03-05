@@ -26,12 +26,10 @@ A production-ready full-stack template: **FastAPI** backend (MySQL, JWT auth) an
 
    Edit `.env` and set at least: `SECRET_KEY`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `FIRST_SUPERUSER_PASSWORD`.
 
-2. **Start infrastructure and run migrations:**
+2. **Start infrastructure:**
 
    ```bash
    make up        # DB, Adminer, Mailcatcher
-   make migrate   # Alembic migrations
-   make seed      # Initial superuser
    ```
 
 3. **Start the app (backend + frontend with hot reload):**
@@ -93,7 +91,7 @@ Run `make help` for the full list.
 
 1. Clone the repo or use it as a GitHub template.
 2. Copy `.env.example` to `.env` and set secrets.
-3. Run `make up && make migrate && make seed && make dev`.
+3. Run `make up && make dev`.
 4. Customize backend models, API routes, and frontend pages to your needs.
 
 For detailed workflows, see [Development](docs/implementation/development.md).
