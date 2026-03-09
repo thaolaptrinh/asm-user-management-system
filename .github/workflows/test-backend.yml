@@ -10,7 +10,7 @@ jobs:
   test-backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # .env.example has empty secrets — fill them in for CI.
       # These values are non-sensitive test credentials, not production secrets.
