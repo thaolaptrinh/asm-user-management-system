@@ -10,12 +10,6 @@ export function proxy(request: NextRequest) {
   const hasValidToken = Boolean(token?.trim())
   const { pathname } = request.nextUrl
 
-  const isAuthRoute =
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/signup") ||
-    pathname.startsWith("/recover-password") ||
-    pathname.startsWith("/reset-password")
-
   const isProtectedRoute =
     pathname === "/" ||
     pathname.startsWith("/admin") ||
@@ -25,12 +19,6 @@ export function proxy(request: NextRequest) {
   if (isProtectedRoute && !hasValidToken) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
-    return NextResponse.redirect(url)
-  }
-
-  if (isAuthRoute && hasValidToken) {
-    const url = request.nextUrl.clone()
-    url.pathname = "/"
     return NextResponse.redirect(url)
   }
 

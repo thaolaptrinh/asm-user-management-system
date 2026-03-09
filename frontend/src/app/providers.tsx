@@ -2,9 +2,15 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
+import { useRouter } from "next/navigation"
 import { ThemeProvider } from "next-themes"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Toaster } from "sonner"
+import {
+  setQueryClient,
+  setupUnauthorizedHandler,
+} from "@/lib/api-error-handler"
+import { setRouterInstance } from "@/lib/router-instance"
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -17,6 +23,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
         },
       }),
   )
+  const router = useRouter()
+
+  useEffect(() => {
+    setQueryClient(queryClient)
+    setRouterInstance(router)
+    setupUnauthorizedHandler()
+  }, [queryClient, router])
 
   return (
     <QueryClientProvider client={queryClient}>
