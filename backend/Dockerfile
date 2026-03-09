@@ -29,7 +29,13 @@ FROM builder AS development
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
-# Copy source BEFORE uv sync so editable/workspace install can find it
+# Create non-root user before COPY to use --chown (matches production pattern)
+RUN groupadd --system --gid ${GROUP_ID} appgroup && \
+    useradd --system --gid appgroup --uid ${USER_ID} --shell /bin/bash appuser && \
+    mkdir -p /home/appuser/.cache/uv /home/appuser/.cache/ruff && \
+    chown -R appuser:appgroup /home/appuser
+
+# Copy source AFTER user exists (ensures correct UID/GID mapping)
 COPY --chown=appuser:appgroup backend/app ./app
 COPY --chown=appuser:appgroup backend/alembic ./alembic
 COPY --chown=appuser:appgroup backend/alembic.ini ./alembic.ini
@@ -39,18 +45,16 @@ COPY --chown=appuser:appgroup backend/tests ./tests
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
 
-# Create non-root user and fix all permissions
-RUN groupadd --system --gid ${GROUP_ID} appgroup && \
-    useradd --system --gid appgroup --uid ${USER_ID} --shell /bin/bash appuser && \
-    mkdir -p /home/appuser/.cache/uv && \
-    chown -R appuser:appgroup /home/appuser && \
-    chown -R appuser:appgroup /app/.venv && \
+# --- CHANGED: Fix .venv ownership separately
+RUN chown -R appuser:appgroup /app/.venv && \
     chmod -R 775 /app/alembic/versions
 
 # Switch to non-root user
 USER appuser
 
 ENV PATH="/app/.venv/bin:$PATH"
+ENV RUFF_CACHE_DIR=/home/appuser/.cache/ruff
+ENV PYTHONPATH=/app
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
