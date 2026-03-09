@@ -3,10 +3,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+DB_CONNECTION=$(grep "^DB_CONNECTION=" "$ROOT/.env" | cut -d= -f2 | cut -d'#' -f1 | tr -d '[:space:]')
+DB_CONNECTION="${DB_CONNECTION:-mysql}"
+
 DC="docker compose \
   --env-file $ROOT/.env \
   -f $ROOT/docker/compose.base.yml \
-  -f $ROOT/docker/compose.dev.yml"
+  -f $ROOT/docker/compose.dev.yml \
+  --profile $DB_CONNECTION"
 
 # Ensure backend container is running
 if [ -z "$($DC ps -q backend)" ]; then
