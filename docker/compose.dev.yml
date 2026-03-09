@@ -38,6 +38,10 @@ services:
       MAIL_HOST: mailpit
       MAIL_PORT: "1025"
     volumes:
+      # Dependency files - sync changes between host ↔ container
+      - ../backend/pyproject.toml:/app/pyproject.toml:rw
+      - ../uv.lock:/app/uv.lock:rw
+      # Alembic migrations - sync new migration files
       - ../backend/alembic/versions:/app/alembic/versions:rw
     networks:
       - app-network

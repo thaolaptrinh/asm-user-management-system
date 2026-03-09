@@ -29,25 +29,26 @@ FROM builder AS development
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
-# Create non-root user matching host user (prevents permission issues)
-RUN groupadd --system --gid ${GROUP_ID} appgroup && \
-    useradd --system --gid appgroup --uid ${USER_ID} --shell /bin/bash appuser && \
-    chown -R appuser:appgroup /app
-
 # Copy source BEFORE uv sync so editable/workspace install can find it
 COPY --chown=appuser:appgroup backend/app ./app
 COPY --chown=appuser:appgroup backend/alembic ./alembic
 COPY --chown=appuser:appgroup backend/alembic.ini ./alembic.ini
 COPY --chown=appuser:appgroup backend/tests ./tests
 
+# Install dependencies (creates .venv)
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
 
-# Switch to non-root user BEFORE running application
-USER appuser
+# Create non-root user and fix all permissions
+RUN groupadd --system --gid ${GROUP_ID} appgroup && \
+    useradd --system --gid appgroup --uid ${USER_ID} --shell /bin/bash appuser && \
+    mkdir -p /home/appuser/.cache/uv && \
+    chown -R appuser:appgroup /home/appuser && \
+    chown -R appuser:appgroup /app/.venv && \
+    chmod -R 775 /app/alembic/versions
 
-# Ensure write permissions for bind-mounted directories
-RUN chmod -R 775 /app/alembic/versions
+# Switch to non-root user
+USER appuser
 
 ENV PATH="/app/.venv/bin:$PATH"
 
@@ -55,9 +56,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
 
 CMD ["uvicorn", "app.main:app", \
-     "--host", "0.0.0.0", "--port", "8000", \
-     "--reload", "--reload-dir", "/app/app", \
-     "--log-level", "debug"]
+    "--host", "0.0.0.0", "--port", "8000", \
+    "--reload", "--reload-dir", "/app/app", \
+    "--log-level", "debug"]
 
 # ── Production: minimal image, non-root user ──────────────────────────
 FROM base AS production
