@@ -25,14 +25,29 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ── Development: add dev deps, source baked in + synced via compose watch
 FROM builder AS development
 
+# Build-time arguments for user mapping (auto-detected by Makefile)
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
+# Create non-root user matching host user (prevents permission issues)
+RUN groupadd --system --gid ${GROUP_ID} appgroup && \
+    useradd --system --gid appgroup --uid ${USER_ID} --shell /bin/bash appuser && \
+    chown -R appuser:appgroup /app
+
 # Copy source BEFORE uv sync so editable/workspace install can find it
-COPY backend/app ./app
-COPY backend/alembic ./alembic
-COPY backend/alembic.ini ./alembic.ini
-COPY backend/tests ./tests
+COPY --chown=appuser:appgroup backend/app ./app
+COPY --chown=appuser:appgroup backend/alembic ./alembic
+COPY --chown=appuser:appgroup backend/alembic.ini ./alembic.ini
+COPY --chown=appuser:appgroup backend/tests ./tests
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
+
+# Switch to non-root user BEFORE running application
+USER appuser
+
+# Ensure write permissions for bind-mounted directories
+RUN chmod -R 775 /app/alembic/versions
 
 ENV PATH="/app/.venv/bin:$PATH"
 

@@ -2,6 +2,10 @@
 DEV_PROJECT  := dev
 TEST_PROJECT := test
 
+# Auto-detect host UID/GID for Docker user mapping
+HOST_UID := $(shell id -u)
+HOST_GID := $(shell id -g)
+
 DC        := docker compose --env-file .env
 DC_BASE   := $(DC) -f docker/compose.base.yml
 
@@ -39,7 +43,7 @@ dev: ## Start all services with hot-reload via docker compose watch (blocks term
 
 .PHONY: dev-build
 dev-build: ## Rebuild images then start with hot-reload (NO_CACHE=1 for no-cache)
-	$(DC_DEV) build $(if $(NO_CACHE),--no-cache,)
+	$(DC_DEV) build --build-arg USER_ID=$(HOST_UID) --build-arg GROUP_ID=$(HOST_GID) $(if $(NO_CACHE),--no-cache,)
 	$(DC_DEV) watch
 
 .PHONY: restart
@@ -104,7 +108,7 @@ migrate: ## Run pending migrations
 .PHONY: migrate-fresh
 migrate-fresh: ## Drop all tables (bypasses down migrations) and re-run all migrations
 	$(DC_DEV) exec backend python -c \
-		"from sqlalchemy import create_engine; from app.core.config import settings; from app.db.base import Base; e = create_engine(settings.DATABASE_URL_SYNC); Base.metadata.drop_all(e); e.dispose()"
+		"from sqlalchemy import create_engine; from app.core.config import settings; from app.db.base import Base; e = create_engine(settings.DATABASE_URL_SYNC); Base.metadata.reflect(bind=e); Base.metadata.drop_all(e); e.dispose()"
 	$(DC_DEV) exec backend alembic upgrade head
 
 .PHONY: migrate-rollback
