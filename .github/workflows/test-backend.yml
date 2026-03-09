@@ -2,42 +2,34 @@ name: Test Backend
 
 on:
   push:
-    branches:
-      - master
+    branches: [main]
   pull_request:
-    types:
-      - opened
-      - synchronize
+    types: [opened, synchronize]
 
 jobs:
   test-backend:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+
+      # .env.example has empty secrets — fill them in for CI.
+      # These values are non-sensitive test credentials, not production secrets.
+      - name: Create .env for tests
+        run: |
+          cp .env.example .env
+          sed -i "s|^APP_KEY=.*|APP_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')|" .env
+          sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=ci-db-password|" .env
+          sed -i "s|^DB_ROOT_PASSWORD=.*|DB_ROOT_PASSWORD=ci-root-password|" .env
+          sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')|" .env
+          sed -i "s|^FIRST_SUPERUSER_PASSWORD=.*|FIRST_SUPERUSER_PASSWORD=ci-superuser-pass|" .env
+
+      - name: Run backend tests
+        run: make test-be
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          python-version: "3.10"
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-      - run: docker compose down -v --remove-orphans
-      - run: docker compose up -d db mailcatcher
-      - name: Migrate DB (app)
-        run: uv run bash scripts/prestart.sh
-        working-directory: backend
-      - name: Reset test DB (drop + recreate app_test)
-        run: ./scripts/reset-test-db.sh
-      - name: Run tests
-        run: uv run bash scripts/tests-start.sh "Coverage for ${{ github.sha }}"
-        working-directory: backend
-      - run: docker compose down -v --remove-orphans
-      - name: Store coverage files
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-html
+          name: coverage-html-${{ github.sha }}
           path: backend/htmlcov
           include-hidden-files: true
-      - name: Coverage report
-        run: uv run coverage report --fail-under=90
-        working-directory: backend

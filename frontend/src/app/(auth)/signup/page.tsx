@@ -1,13 +1,12 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
+import { useMutation } from "@tanstack/react-query"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useEffect } from "react"
 import { useForm } from "react-hook-form"
+import { toast } from "sonner"
 import { z } from "zod"
-
-import type { UserRegister } from "@/client"
+import { auth } from "@/client/sdk.gen"
 import {
   Form,
   FormControl,
@@ -19,7 +18,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
 import { PasswordInput } from "@/components/ui/password-input"
-import { isLoggedIn, useAuth } from "@/lib/auth"
 
 const formSchema = z
   .object({
@@ -41,8 +39,6 @@ const formSchema = z
 type FormData = z.infer<typeof formSchema>
 
 export default function SignUpPage() {
-  const router = useRouter()
-  const { signUpMutation } = useAuth()
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     mode: "onBlur",
@@ -55,18 +51,39 @@ export default function SignUpPage() {
     },
   })
 
-  useEffect(() => {
-    if (isLoggedIn()) {
-      router.replace("/")
-    }
-  }, [router])
+  const mutation = useMutation({
+    mutationFn: async (data: {
+      email: string
+      full_name: string
+      password: string
+    }) => {
+      const { data: res } = await auth.register({
+        body: data,
+      })
+
+      if (!res) {
+        throw new Error("Failed to create account")
+      }
+
+      return res
+    },
+
+    onSuccess: () => {
+      toast.success("Account created successfully")
+      window.location.href = "/"
+    },
+
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
 
   const onSubmit = (data: FormData) => {
-    if (signUpMutation.isPending) return
+    if (mutation.isPending) return
 
-    // exclude confirm_password from submission data
-    const { confirm_password: _confirm_password, ...submitData } = data
-    signUpMutation.mutate({ body: submitData as UserRegister })
+    const { confirm_password, ...submitData } = data
+
+    mutation.mutate(submitData)
   }
 
   return (
@@ -83,6 +100,7 @@ export default function SignUpPage() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Full Name</FormLabel>
+
                 <FormControl>
                   <Input
                     data-testid="full-name-input"
@@ -91,6 +109,7 @@ export default function SignUpPage() {
                     {...field}
                   />
                 </FormControl>
+
                 <FormMessage />
               </FormItem>
             )}
@@ -102,6 +121,7 @@ export default function SignUpPage() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Email</FormLabel>
+
                 <FormControl>
                   <Input
                     data-testid="email-input"
@@ -110,6 +130,7 @@ export default function SignUpPage() {
                     {...field}
                   />
                 </FormControl>
+
                 <FormMessage />
               </FormItem>
             )}
@@ -121,6 +142,7 @@ export default function SignUpPage() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Password</FormLabel>
+
                 <FormControl>
                   <PasswordInput
                     data-testid="password-input"
@@ -128,6 +150,7 @@ export default function SignUpPage() {
                     {...field}
                   />
                 </FormControl>
+
                 <FormMessage />
               </FormItem>
             )}
@@ -139,6 +162,7 @@ export default function SignUpPage() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Confirm Password</FormLabel>
+
                 <FormControl>
                   <PasswordInput
                     data-testid="confirm-password-input"
@@ -146,6 +170,7 @@ export default function SignUpPage() {
                     {...field}
                   />
                 </FormControl>
+
                 <FormMessage />
               </FormItem>
             )}
@@ -154,7 +179,7 @@ export default function SignUpPage() {
           <LoadingButton
             type="submit"
             className="w-full"
-            loading={signUpMutation.isPending}
+            loading={mutation.isPending}
           >
             Sign Up
           </LoadingButton>

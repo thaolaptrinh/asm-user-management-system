@@ -1,49 +1,65 @@
-from fastapi.testclient import TestClient
-from sqlmodel import Session
+"""
+Test utilities for user-related operations.
+Uses Repository pattern for database operations.
+"""
 
-from app import crud
+from httpx import AsyncClient
+
 from app.core.config import settings
-from app.models import User, UserCreate, UserUpdate
+from app.core.security import hash_password
+from app.models.user import User
+from app.repositories.user import UserRepository
+from app.schemas.user import UserCreate
 from tests.utils.utils import random_email, random_lower_string
 
 
-def user_authentication_headers(
-    *, client: TestClient, email: str, password: str
+async def user_authentication_headers(
+    *, client: AsyncClient, email: str, password: str
 ) -> dict[str, str]:
+    """Get authentication headers for a user."""
     data = {"username": email, "password": password}
-
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=data)
-    response = r.json()
-    auth_token = response["access_token"]
-    headers = {"Authorization": f"Bearer {auth_token}"}
-    return headers
+    response = await client.post(f"{settings.API_V1_PREFIX}/auth/login", data=data)
+    # Login sets HttpOnly cookie; use it as Bearer for test requests
+    token = response.cookies["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
-def create_random_user(db: Session) -> User:
+async def create_random_user(session) -> User:
+    """Create a random user for testing."""
     email = random_email()
     password = random_lower_string()
     user_in = UserCreate(email=email, password=password)
-    user = crud.create_user(session=db, user_create=user_in)
+
+    user_repo = UserRepository(session)
+    user = await user_repo.create(
+        email=user_in.email,
+        full_name=user_in.full_name,
+        hashed_password=hash_password(user_in.password),
+        is_active=user_in.is_active,
+        is_superuser=user_in.is_superuser,
+    )
     return user
 
 
-def authentication_token_from_email(
-    *, client: TestClient, email: str, db: Session
+async def authentication_token_from_email(
+    *, client: AsyncClient, session, email: str
 ) -> dict[str, str]:
-    """
-    Return a valid token for the user with given email.
-
-    If the user doesn't exist it is created first.
-    """
+    """Return a valid token for the user with given email."""
     password = random_lower_string()
-    user = crud.get_user_by_email(session=db, email=email)
-    if not user:
-        user_in_create = UserCreate(email=email, password=password)
-        user = crud.create_user(session=db, user_create=user_in_create)
-    else:
-        user_in_update = UserUpdate(password=password)
-        if not user.id:
-            raise Exception("User id not set")
-        user = crud.update_user(session=db, db_user=user, user_in=user_in_update)
+    user_repo = UserRepository(session)
+    user = await user_repo.get_by_email(email)
 
-    return user_authentication_headers(client=client, email=email, password=password)
+    if not user:
+        user = await user_repo.create(
+            email=email,
+            hashed_password=hash_password(password),
+            is_active=True,
+            is_superuser=False,
+        )
+    else:
+        user.hashed_password = hash_password(password)
+        await session.flush()
+
+    return await user_authentication_headers(
+        client=client, email=email, password=password
+    )

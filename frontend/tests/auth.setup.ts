@@ -15,12 +15,32 @@ setup("authenticate", async ({ page }) => {
     )
   }
 
+  // Log any console errors
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
+      console.log(`Console error: ${msg.text()}`)
+    }
+  })
+
   await page.goto("/login")
   await page.getByTestId("email-input").fill(email)
   await page.getByTestId("password-input").fill(password)
-  await page.getByRole("button", { name: "Log In" }).click()
-  await page.waitForURL("/")
-  await page.getByRole("heading", { name: /Welcome back/ }).waitFor({ state: "visible" })
 
+  console.log(`Attempting login with: ${email}`)
+
+  await page.getByRole("button", { name: "Log In" }).click()
+
+  // Wait for URL change to "/" (redirect after successful login)
+  console.log(`Waiting for redirect to /...`)
+  await page.waitForURL("/", { timeout: 15000 })
+  console.log(`Successfully redirected to: ${page.url()}`)
+
+  // Verify we're on the right page
+  await page
+    .getByRole("heading", { name: /Welcome back/ })
+    .waitFor({ state: "visible", timeout: 5000 })
+
+  // Save auth state for other tests
   await page.context().storageState({ path: authFile })
+  console.log(`Auth state saved to: ${authFile}`)
 })

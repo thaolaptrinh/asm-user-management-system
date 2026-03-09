@@ -1,0 +1,88 @@
+networks:
+  traefik-public:
+    external: true
+
+services:
+  db-mysql:
+    restart: always
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  db-postgres:
+    restart: always
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  prestart:
+    image: ${DOCKER_IMAGE_BACKEND}:${IMAGE_TAG:-latest}
+    networks:
+      - default
+
+  backend:
+    image: ${DOCKER_IMAGE_BACKEND}:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: production
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      WEB_CONCURRENCY: "2"
+      LOG_LEVEL: info
+      LOG_FORMAT: json
+    networks:
+      - default
+      - traefik-public
+    depends_on:
+      db-mysql:
+        condition: service_healthy
+        required: false
+      db-postgres:
+        condition: service_healthy
+        required: false
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.${STACK_NAME}-api-http.entrypoints=http"
+      - "traefik.http.routers.${STACK_NAME}-api-http.rule=Host(`api.${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.${STACK_NAME}-api-http.middlewares=https-redirect"
+      - "traefik.http.routers.${STACK_NAME}-api-https.entrypoints=https"
+      - "traefik.http.routers.${STACK_NAME}-api-https.rule=Host(`api.${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.${STACK_NAME}-api-https.tls=true"
+      - "traefik.http.routers.${STACK_NAME}-api-https.tls.certresolver=le"
+      - "traefik.http.routers.${STACK_NAME}-api-https.middlewares=security-headers,ratelimit"
+      - "traefik.http.services.${STACK_NAME}-api.loadbalancer.server.port=8000"
+
+  frontend:
+    image: ${DOCKER_IMAGE_FRONTEND}:${IMAGE_TAG:-latest}
+    build:
+      target: production
+      args:
+        NEXT_PUBLIC_API_URL: ${API_URL:-https://api.${TRAEFIK_DOMAIN}}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    networks:
+      - default
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.${STACK_NAME}-web-http.entrypoints=http"
+      - "traefik.http.routers.${STACK_NAME}-web-http.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.${STACK_NAME}-web-http.middlewares=https-redirect"
+      - "traefik.http.routers.${STACK_NAME}-web-https.entrypoints=https"
+      - "traefik.http.routers.${STACK_NAME}-web-https.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.${STACK_NAME}-web-https.tls=true"
+      - "traefik.http.routers.${STACK_NAME}-web-https.tls.certresolver=le"
+      - "traefik.http.routers.${STACK_NAME}-web-https.middlewares=security-headers"
+      - "traefik.http.services.${STACK_NAME}-web.loadbalancer.server.port=3000"

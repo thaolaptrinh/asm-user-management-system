@@ -1,6 +1,5 @@
 "use client"
 import type { ColumnDef } from "@tanstack/react-table"
-
 import type { UserPublic } from "@/client"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"

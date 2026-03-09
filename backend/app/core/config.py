@@ -1,119 +1,127 @@
-import secrets
-import warnings
-from typing import Annotated, Any, Literal
+from functools import lru_cache
+from typing import Literal
 
-from pydantic import (
-    AnyUrl,
-    BeforeValidator,
-    EmailStr,
-    HttpUrl,
-    MySQLDsn,
-    computed_field,
-    model_validator,
-)
+from pydantic import AnyHttpUrl, EmailStr, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing_extensions import Self
-
-
-def parse_cors(v: Any) -> list[str] | str:
-    if isinstance(v, str) and not v.startswith("["):
-        return [i.strip() for i in v.split(",") if i.strip()]
-    elif isinstance(v, list | str):
-        return v
-    raise ValueError(v)
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        # Use top level .env file (one level above ./backend/)
         env_file="../.env",
         env_ignore_empty=True,
         extra="ignore",
+        case_sensitive=False,
     )
-    API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = secrets.token_urlsafe(32)
-    # 60 minutes * 24 hours * 8 days = 8 days
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
-    FRONTEND_HOST: str = "http://localhost:3000"
-    ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
-    BACKEND_CORS_ORIGINS: Annotated[
-        list[AnyUrl] | str, BeforeValidator(parse_cors)
-    ] = []
+    # Application
+    APP_NAME: str = "FastAPI App"
+    APP_ENV: Literal["local", "staging", "production"] = "local"
+    APP_KEY: str
+    APP_DEBUG: bool = False
+    APP_URL: AnyHttpUrl = "http://localhost:8000"  # type: ignore[assignment]
+    API_V1_PREFIX: str = "/api/v1"
 
-    @computed_field  # type: ignore[prop-decorator]
+    # Database
+    DB_CONNECTION: Literal["mysql", "postgres"] = "mysql"
+    DB_HOST: str = "localhost"
+    DB_PORT: int = 3306
+    DB_DATABASE: str
+    DB_USERNAME: str
+    DB_PASSWORD: str
+
+    @computed_field
+    @property
+    def DATABASE_URL(self) -> str:
+        if self.DB_CONNECTION == "postgres":
+            return (
+                f"postgresql+asyncpg://{self.DB_USERNAME}:{self.DB_PASSWORD}"
+                f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_DATABASE}"
+            )
+        return (
+            f"mysql+aiomysql://{self.DB_USERNAME}:{self.DB_PASSWORD}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_DATABASE}"
+        )
+
+    @computed_field
+    @property
+    def DATABASE_URL_SYNC(self) -> str:
+        if self.DB_CONNECTION == "postgres":
+            return (
+                f"postgresql+psycopg2://{self.DB_USERNAME}:{self.DB_PASSWORD}"
+                f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_DATABASE}"
+            )
+        return (
+            f"mysql+pymysql://{self.DB_USERNAME}:{self.DB_PASSWORD}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_DATABASE}"
+        )
+
+    # Authentication & Security
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+
+    # CORS & Security
+    FRONTEND_URL: str = "http://localhost:3000"
+    CORS_ORIGINS_RAW: str = "http://localhost:3000"
+
+    @computed_field
+    @property
+    def CORS_ORIGINS(self) -> list[str]:
+        if isinstance(self.CORS_ORIGINS_RAW, str):
+            return [
+                origin.strip()
+                for origin in self.CORS_ORIGINS_RAW.split(",")
+                if origin.strip()
+            ]
+        return self.CORS_ORIGINS_RAW
+
+    @computed_field
     @property
     def all_cors_origins(self) -> list[str]:
-        return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [
-            self.FRONTEND_HOST
-        ]
+        return list({self.FRONTEND_URL, *self.CORS_ORIGINS})
 
-    PROJECT_NAME: str
-    SENTRY_DSN: HttpUrl | None = None
-    MYSQL_SERVER: str
-    MYSQL_PORT: int = 3306
-    MYSQL_USER: str
-    MYSQL_PASSWORD: str = ""
-    MYSQL_DATABASE: str = ""
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def SQLALCHEMY_DATABASE_URI(self) -> MySQLDsn:
-        return MySQLDsn.build(
-            scheme="mysql+pymysql",
-            username=self.MYSQL_USER,
-            password=self.MYSQL_PASSWORD,
-            host=self.MYSQL_SERVER,
-            port=self.MYSQL_PORT,
-            path=self.MYSQL_DATABASE,
-        )
-
-    SMTP_TLS: bool = True
-    SMTP_SSL: bool = False
-    SMTP_PORT: int = 587
-    SMTP_HOST: str | None = None
-    SMTP_USER: str | None = None
-    SMTP_PASSWORD: str | None = None
-    EMAILS_FROM_EMAIL: EmailStr | None = None
-    EMAILS_FROM_NAME: str | None = None
-
-    @model_validator(mode="after")
-    def _set_default_emails_from(self) -> Self:
-        if not self.EMAILS_FROM_NAME:
-            self.EMAILS_FROM_NAME = self.PROJECT_NAME
-        return self
-
-    EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 48
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def emails_enabled(self) -> bool:
-        return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
-
-    EMAIL_TEST_USER: EmailStr = "test@example.com"
-    FIRST_SUPERUSER: EmailStr
+    # Superuser
+    FIRST_SUPERUSER: EmailStr = "admin@example.com"  # type: ignore[assignment]
     FIRST_SUPERUSER_PASSWORD: str
 
-    def _check_default_secret(self, var_name: str, value: str | None) -> None:
-        if value == "changethis":
-            message = (
-                f'The value of {var_name} is "changethis", '
-                "for security, please change it, at least for deployments."
-            )
-            if self.ENVIRONMENT == "local":
-                warnings.warn(message, stacklevel=1)
-            else:
-                raise ValueError(message)
+    # Logging
+    LOG_LEVEL: str = "debug"
+    LOG_FORMAT: Literal["json", "console"] = "console"
 
-    @model_validator(mode="after")
-    def _enforce_non_default_secrets(self) -> Self:
-        self._check_default_secret("SECRET_KEY", self.SECRET_KEY)
-        self._check_default_secret("MYSQL_PASSWORD", self.MYSQL_PASSWORD)
-        self._check_default_secret(
-            "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
-        )
+    # Rate Limiting
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_PER_MINUTE: int = 60
 
-        return self
+    # Mail
+    MAIL_MAILER: str = "smtp"
+    MAIL_HOST: str | None = None
+    MAIL_PORT: int = 1025
+    MAIL_USERNAME: str | None = None
+    MAIL_PASSWORD: str | None = None
+    MAIL_ENCRYPTION: str | None = None
+    MAIL_FROM_ADDRESS: EmailStr = "noreply@example.com"  # type: ignore[assignment]
+    MAIL_FROM_NAME: str = "App"
+
+    @computed_field
+    @property
+    def mail_enabled(self) -> bool:
+        return self.MAIL_HOST is not None
+
+    @computed_field
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV == "production"
+
+    @computed_field
+    @property
+    def is_debug(self) -> bool:
+        return self.APP_DEBUG
 
 
-settings = Settings()  # type: ignore
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings: Settings = get_settings()

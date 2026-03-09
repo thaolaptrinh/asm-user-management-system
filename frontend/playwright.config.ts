@@ -101,11 +101,15 @@ export default defineConfig({
 
   /* E2E web server: use dev:e2e (next dev --webpack). Turbopack can panic in container under load
    * (turbo-persistence range index bug); Webpack is stable. Dev (make dev) still uses Turbopack.
-   * Revisit when Next.js fixes the panic; then we can try `bun run dev` here again. */
-  webServer: {
-    command: 'bun run dev:e2e',
-    url: 'http://localhost:3000',
-    timeout: 120 * 1000,
-    reuseExistingServer: true,
-  },
+   * Revisit when Next.js fixes the panic; then we can try `bun run dev` here again.
+   *
+   * SKIP in Docker: Frontend is already running in another container. */
+  webServer: process.env.PLAYWRIGHT_SKIP_WEB_SERVER
+    ? undefined
+    : {
+        command: 'bun run dev:e2e',
+        url: 'http://localhost:3000',
+        timeout: 120 * 1000,
+        reuseExistingServer: true,
+      },
 });

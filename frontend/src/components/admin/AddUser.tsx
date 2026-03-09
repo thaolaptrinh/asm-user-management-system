@@ -5,7 +5,7 @@ import { Plus } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { type UserCreate, Users } from "@/client"
+import { type UserCreate, users } from "@/client"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -73,7 +73,7 @@ const AddUser = () => {
 
   const mutation = useMutation({
     mutationFn: (body: UserCreate) =>
-      Users.createUser({ body, throwOnError: true }).then((r) => r.data),
+      users.createUser({ body, throwOnError: true }).then((r) => r.data),
     onSuccess: () => {
       showSuccessToast("User created successfully")
       form.reset()

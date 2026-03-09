@@ -1,5 +1,4 @@
 import { expect, test } from "@playwright/test"
-import { createUser } from "./utils/user.ts"
 import {
   randomEmail,
   randomItemDescription,
@@ -7,6 +6,7 @@ import {
   randomPassword,
 } from "./utils/random"
 import { logInUser } from "./utils/user"
+import { createUser } from "./utils/user.ts"
 
 test("Items page is accessible and shows correct title", async ({ page }) => {
   await page.goto("/items")

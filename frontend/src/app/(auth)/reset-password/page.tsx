@@ -8,8 +8,7 @@ import { Suspense, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
-
-import { Login } from "@/client"
+import { auth } from "@/client/sdk.gen"
 import {
   Form,
   FormControl,
@@ -20,7 +19,6 @@ import {
 } from "@/components/ui/form"
 import { LoadingButton } from "@/components/ui/loading-button"
 import { PasswordInput } from "@/components/ui/password-input"
-import { isLoggedIn } from "@/lib/auth"
 
 const formSchema = z
   .object({
@@ -55,29 +53,42 @@ function ResetPasswordForm() {
   })
 
   useEffect(() => {
-    if (isLoggedIn()) {
-      router.replace("/")
-    }
     if (!token) {
       router.replace("/login")
     }
   }, [token, router])
 
   const mutation = useMutation({
-    mutationFn: (body: { new_password: string; token: string }) =>
-      Login.resetPassword({ body, throwOnError: true }).then((r) => r.data),
+    mutationFn: async (body: { new_password: string; token: string }) => {
+      const { data } = await auth.resetPassword({
+        body,
+      })
+
+      if (!data) {
+        throw new Error("Failed to reset password")
+      }
+
+      return data
+    },
+
     onSuccess: () => {
       toast.success("Password updated successfully")
       form.reset()
       router.push("/login")
     },
+
     onError: (error: Error) => {
       toast.error(error.message)
     },
   })
 
   const onSubmit = (data: FormData) => {
-    mutation.mutate({ new_password: data.new_password, token })
+    if (mutation.isPending || !token) return
+
+    mutation.mutate({
+      new_password: data.new_password,
+      token,
+    })
   }
 
   return (
@@ -94,6 +105,7 @@ function ResetPasswordForm() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>New Password</FormLabel>
+
                 <FormControl>
                   <PasswordInput
                     data-testid="new-password-input"
@@ -101,6 +113,7 @@ function ResetPasswordForm() {
                     {...field}
                   />
                 </FormControl>
+
                 <FormMessage />
               </FormItem>
             )}
@@ -112,6 +125,7 @@ function ResetPasswordForm() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Confirm Password</FormLabel>
+
                 <FormControl>
                   <PasswordInput
                     data-testid="confirm-password-input"
@@ -119,6 +133,7 @@ function ResetPasswordForm() {
                     {...field}
                   />
                 </FormControl>
+
                 <FormMessage />
               </FormItem>
             )}

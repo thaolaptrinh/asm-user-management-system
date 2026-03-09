@@ -11,10 +11,6 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  // Note: Auth is protected by proxy (token existence check; Next.js 16+)
-  // and validated at API client level (token validity check)
-  // Invalid/expired tokens trigger auto-logout via useAuth hook
-
   return (
     <SidebarProvider>
       <AppSidebar />

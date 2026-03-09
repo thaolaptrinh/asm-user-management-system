@@ -3,8 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Trash2 } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
-
-import { Users } from "@/client"
+import { users } from "@/client/sdk.gen"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -33,9 +32,9 @@ const DeleteUser = ({ id, onSuccess }: DeleteUserProps) => {
 
   const mutation = useMutation({
     mutationFn: () =>
-      Users.deleteUser({ path: { user_id: id }, throwOnError: true }).then(
-        (r) => r.data,
-      ),
+      users
+        .deleteUser({ path: { user_id: id }, throwOnError: true })
+        .then((r) => r.data),
     onSuccess: () => {
       showSuccessToast("The user was deleted successfully")
       setIsOpen(false)

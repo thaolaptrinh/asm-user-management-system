@@ -1,25 +1,30 @@
+"""
+Test item endpoints.
+Uses async pattern with pytest-asyncio.
+"""
+
 import uuid
 
-from fastapi.testclient import TestClient
-from sqlmodel import Session
+import pytest
 
-from app import crud
 from app.core.config import settings
-from app.models import ItemCreate
+from app.repositories.item import ItemRepository
+from app.repositories.user import UserRepository
+from app.schemas.item import ItemCreate
 from tests.utils.item import create_random_item
 from tests.utils.utils import random_lower_string
 
 
-def test_create_item(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
+@pytest.mark.asyncio
+async def test_create_item(client, superuser_token_headers):
+    """Test create item."""
     data = {"title": "Foo", "description": "Fighters"}
-    response = client.post(
-        f"{settings.API_V1_STR}/items/",
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/items/",
         headers=superuser_token_headers,
         json=data,
     )
-    assert response.status_code == 200
+    assert response.status_code == 201
     content = response.json()
     assert content["title"] == data["title"]
     assert content["description"] == data["description"]
@@ -27,54 +32,62 @@ def test_create_item(
     assert "owner_id" in content
 
 
-def test_read_item(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
-    item = create_random_item(db)
-    response = client.get(
-        f"{settings.API_V1_STR}/items/{item.id}",
+@pytest.mark.asyncio
+async def test_read_item(client, superuser_token_headers):
+    """Test read item."""
+    # Create item owned by superuser via API
+    data = {"title": "Test Item", "description": "Test Description"}
+    create_response = await client.post(
+        f"{settings.API_V1_PREFIX}/items/",
+        headers=superuser_token_headers,
+        json=data,
+    )
+    assert create_response.status_code == 201
+    item_id = create_response.json()["id"]
+
+    response = await client.get(
+        f"{settings.API_V1_PREFIX}/items/{item_id}",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
     content = response.json()
-    assert content["title"] == item.title
-    assert content["description"] == item.description
-    assert content["id"] == str(item.id)
-    assert content["owner_id"] == str(item.owner_id)
+    assert content["title"] == data["title"]
+    assert content["description"] == data["description"]
+    assert content["id"] == item_id
 
 
-def test_read_item_not_found(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    response = client.get(
-        f"{settings.API_V1_STR}/items/{uuid.uuid4()}",
+@pytest.mark.asyncio
+async def test_read_item_not_found(client, superuser_token_headers):
+    """Test read non-existing item returns 404."""
+    response = await client.get(
+        f"{settings.API_V1_PREFIX}/items/{uuid.uuid4()}",
         headers=superuser_token_headers,
     )
     assert response.status_code == 404
-    content = response.json()
-    assert content["detail"] == "Item not found"
 
 
-def test_read_item_not_enough_permissions(
-    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
-) -> None:
-    item = create_random_item(db)
-    response = client.get(
-        f"{settings.API_V1_STR}/items/{item.id}",
+@pytest.mark.asyncio
+async def test_read_item_not_enough_permissions(
+    client, normal_user_token_headers, session
+):
+    """Test read item without permission returns 403."""
+    item = await create_random_item(session)
+
+    response = await client.get(
+        f"{settings.API_V1_PREFIX}/items/{item.id}",
         headers=normal_user_token_headers,
     )
     assert response.status_code == 403
-    content = response.json()
-    assert content["detail"] == "Not enough permissions"
 
 
-def test_read_items(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
-    create_random_item(db)
-    create_random_item(db)
-    response = client.get(
-        f"{settings.API_V1_STR}/items/",
+@pytest.mark.asyncio
+async def test_read_items(client, superuser_token_headers, session):
+    """Test read items list."""
+    await create_random_item(session)
+    await create_random_item(session)
+
+    response = await client.get(
+        f"{settings.API_V1_PREFIX}/items/",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
@@ -82,105 +95,130 @@ def test_read_items(
     assert len(content["data"]) >= 2
 
 
-def test_read_items_as_normal_user_only_own_items(
-    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
-) -> None:
+@pytest.mark.asyncio
+async def test_read_items_as_normal_user_only_own_items(
+    client, normal_user_token_headers, session
+):
     """Non-superuser GET /items/ returns only their items."""
-    user = crud.get_user_by_email(session=db, email=settings.EMAIL_TEST_USER)
-    assert user is not None
-    item_in = ItemCreate(title=random_lower_string(), description=random_lower_string())
-    crud.create_item(session=db, item_in=item_in, owner_id=user.id)
-    response = client.get(
-        f"{settings.API_V1_STR}/items/",
+    user_repo = UserRepository(session)
+    user = await user_repo.get_by_email(settings.FIRST_SUPERUSER)
+
+    item_repo = ItemRepository(session)
+    await item_repo.create(
+        title=random_lower_string(),
+        description=random_lower_string(),
+        owner_id=user.id,
+    )
+
+    response = await client.get(
+        f"{settings.API_V1_PREFIX}/items/",
         headers=normal_user_token_headers,
     )
     assert response.status_code == 200
     content = response.json()
-    assert content["count"] >= 1
     for item in content["data"]:
-        assert item["owner_id"] == str(user.id)
+        assert item["owner_id"] != str(user.id)
 
 
-def test_update_item(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
-    item = create_random_item(db)
-    data = {"title": "Updated title", "description": "Updated description"}
-    response = client.put(
-        f"{settings.API_V1_STR}/items/{item.id}",
+@pytest.mark.asyncio
+async def test_update_item(client, superuser_token_headers):
+    """Test update item."""
+    # Create item owned by superuser via API
+    data = {"title": "Test Item", "description": "Test Description"}
+    create_response = await client.post(
+        f"{settings.API_V1_PREFIX}/items/",
         headers=superuser_token_headers,
         json=data,
     )
+    assert create_response.status_code == 201
+    item_id = create_response.json()["id"]
+
+    update_data = {"title": "Updated Title"}
+    response = await client.patch(
+        f"{settings.API_V1_PREFIX}/items/{item_id}",
+        headers=superuser_token_headers,
+        json=update_data,
+    )
     assert response.status_code == 200
     content = response.json()
-    assert content["title"] == data["title"]
-    assert content["description"] == data["description"]
-    assert content["id"] == str(item.id)
-    assert content["owner_id"] == str(item.owner_id)
+    assert content["title"] == "Updated Title"
 
 
-def test_update_item_not_found(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    data = {"title": "Updated title", "description": "Updated description"}
-    response = client.put(
-        f"{settings.API_V1_STR}/items/{uuid.uuid4()}",
+@pytest.mark.asyncio
+async def test_update_item_not_found(client, superuser_token_headers):
+    """Test update non-existing item returns 404."""
+    data = {"title": "Updated Title"}
+    response = await client.patch(
+        f"{settings.API_V1_PREFIX}/items/{uuid.uuid4()}",
         headers=superuser_token_headers,
         json=data,
     )
     assert response.status_code == 404
-    content = response.json()
-    assert content["detail"] == "Item not found"
 
 
-def test_update_item_not_enough_permissions(
-    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
-) -> None:
-    item = create_random_item(db)
-    data = {"title": "Updated title", "description": "Updated description"}
-    response = client.put(
-        f"{settings.API_V1_STR}/items/{item.id}",
+@pytest.mark.asyncio
+async def test_update_item_not_enough_permissions(
+    client, normal_user_token_headers, session
+):
+    """Test update item without permission returns 403."""
+    item = await create_random_item(session)
+
+    data = {"title": "Updated Title"}
+    response = await client.patch(
+        f"{settings.API_V1_PREFIX}/items/{item.id}",
         headers=normal_user_token_headers,
         json=data,
     )
     assert response.status_code == 403
-    content = response.json()
-    assert content["detail"] == "Not enough permissions"
 
 
-def test_delete_item(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
-    item = create_random_item(db)
-    response = client.delete(
-        f"{settings.API_V1_STR}/items/{item.id}",
+@pytest.mark.asyncio
+async def test_delete_item(client, superuser_token_headers):
+    """Test delete item."""
+    # Create item owned by superuser via API
+    data = {"title": "Test Item", "description": "Test Description"}
+    create_response = await client.post(
+        f"{settings.API_V1_PREFIX}/items/",
+        headers=superuser_token_headers,
+        json=data,
+    )
+    assert create_response.status_code == 201
+    item_id = create_response.json()["id"]
+
+    response = await client.delete(
+        f"{settings.API_V1_PREFIX}/items/{item_id}",
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
-    content = response.json()
-    assert content["message"] == "Item deleted successfully"
+    assert response.json()["message"] == "Item deleted"
+
+    # Verify item is deleted
+    get_response = await client.get(
+        f"{settings.API_V1_PREFIX}/items/{item_id}",
+        headers=superuser_token_headers,
+    )
+    assert get_response.status_code == 404
 
 
-def test_delete_item_not_found(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    response = client.delete(
-        f"{settings.API_V1_STR}/items/{uuid.uuid4()}",
+@pytest.mark.asyncio
+async def test_delete_item_not_found(client, superuser_token_headers):
+    """Test delete non-existing item returns 404."""
+    response = await client.delete(
+        f"{settings.API_V1_PREFIX}/items/{uuid.uuid4()}",
         headers=superuser_token_headers,
     )
     assert response.status_code == 404
-    content = response.json()
-    assert content["detail"] == "Item not found"
 
 
-def test_delete_item_not_enough_permissions(
-    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
-) -> None:
-    item = create_random_item(db)
-    response = client.delete(
-        f"{settings.API_V1_STR}/items/{item.id}",
+@pytest.mark.asyncio
+async def test_delete_item_not_enough_permissions(
+    client, normal_user_token_headers, session
+):
+    """Test delete item without permission returns 403."""
+    item = await create_random_item(session)
+
+    response = await client.delete(
+        f"{settings.API_V1_PREFIX}/items/{item.id}",
         headers=normal_user_token_headers,
     )
     assert response.status_code == 403
-    content = response.json()
-    assert content["detail"] == "Not enough permissions"

@@ -1,98 +1,89 @@
 "use client"
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useRouter } from "next/navigation"
-import { useCallback, useEffect } from "react"
-import { toast } from "sonner"
+import { auth, users } from "@/client/sdk.gen"
 
-import { Login, type Token, Users } from "@/client"
-import { handleError } from "@/lib/utils"
-import useCustomToast from "./useCustomToast"
-
-const ACCESS_TOKEN_KEY = "access_token"
-const COOKIE_MAX_AGE_DAYS = 8
-
-function setAccessTokenCookie(token: string) {
-  if (typeof document === "undefined") return
-  document.cookie = `${ACCESS_TOKEN_KEY}=${encodeURIComponent(token)}; path=/; max-age=${60 * 60 * 24 * COOKIE_MAX_AGE_DAYS}; SameSite=Lax`
-}
-
-function clearAccessTokenCookie() {
-  if (typeof document === "undefined") return
-  document.cookie = `${ACCESS_TOKEN_KEY}=; path=/; max-age=0`
-}
-
-const isLoggedIn = () => {
-  if (typeof window === "undefined") return false
-  return localStorage.getItem(ACCESS_TOKEN_KEY) !== null
-}
-
-const useAuth = () => {
-  const router = useRouter()
+/**
+ * Login — POSTs credentials to the backend.
+ * The backend sets an HttpOnly `access_token` cookie; no token handling needed here.
+ */
+export function useLogin() {
   const queryClient = useQueryClient()
-  const { showErrorToast } = useCustomToast()
 
-  const logout = useCallback(() => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY)
-    clearAccessTokenCookie()
-    queryClient.clear()
-    router.push("/login")
-    toast.success("Logged out successfully")
-  }, [queryClient, router])
-
-  const { data: user, error } = useQuery({
-    queryKey: ["currentUser"],
-    queryFn: () => Users.readUserMe({ throwOnError: true }).then((r) => r.data),
-    enabled: isLoggedIn(),
-    retry: false,
+  return useMutation({
+    mutationFn: async (credentials: { email: string; password: string }) => {
+      const response = await auth.login({
+        body: {
+          username: credentials.email,
+          password: credentials.password,
+        },
+        throwOnError: true,
+      })
+      // Cookie is set automatically. Refetch user to update auth state.
+      await queryClient.invalidateQueries({ queryKey: ["me"] })
+      const data = await queryClient.fetchQuery({
+        queryKey: ["me"],
+        queryFn: async () => {
+          const { data } = await users.getMe()
+          if (!data) throw new Error("Failed to fetch user")
+          return data
+        },
+      })
+      return response.data
+    },
   })
+}
 
-  // Auto-logout on auth errors (401/404)
-  // Error interceptor in client-config.ts clears auth data
-  // This hook handles the redirect using useEffect to avoid render-phase side effects
-  useEffect(() => {
-    if (error) {
-      logout()
-    }
-  }, [error, logout])
+/**
+ * Logout — calls the backend to clear the HttpOnly cookie server-side.
+ */
+export function useLogout() {
+  const queryClient = useQueryClient()
 
-  const signUpMutation = useMutation({
-    mutationFn: (opts: {
-      body: Parameters<typeof Users.registerUser>[0]["body"]
-    }) =>
-      Users.registerUser({ ...opts, throwOnError: true }).then((r) => r.data),
+  return useMutation({
+    mutationFn: async () => {
+      await auth.logout({ throwOnError: true })
+    },
     onSuccess: () => {
-      router.push("/login")
-      toast.success("Account created successfully")
+      queryClient.clear()
+      window.location.href = "/login"
     },
-    onError: handleError.bind(showErrorToast),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] })
+    onError: () => {
+      // Clear local state even if the logout request fails
+      queryClient.clear()
+      window.location.href = "/login"
     },
   })
+}
 
-  const loginMutation = useMutation({
-    mutationFn: (opts: {
-      body: Parameters<typeof Login.loginAccessToken>[0]["body"]
-    }) =>
-      Login.loginAccessToken({ ...opts, throwOnError: true }).then(
-        (r) => r.data,
-      ),
-    onSuccess: (data: Token) => {
-      localStorage.setItem(ACCESS_TOKEN_KEY, data.access_token)
-      setAccessTokenCookie(data.access_token)
-      toast.success("Logged in successfully")
-      router.push("/")
+/**
+ * Fetch current user — relies on the HttpOnly cookie being sent automatically.
+ * Returns undefined when not authenticated (401 → query error).
+ */
+export function useMe() {
+  return useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const { data } = await users.getMe()
+      if (!data) throw new Error("Failed to fetch user")
+      return data
     },
-    onError: handleError.bind(showErrorToast),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
   })
+}
+
+/**
+ * Composite auth hook — the single source of truth for client-side auth state.
+ */
+export function useAuth() {
+  const { data: user, isPending, isError } = useMe()
+  const logoutMutation = useLogout()
 
   return {
-    signUpMutation,
-    loginMutation,
-    logout,
-    user,
+    isAuthenticated: !!user && !isError,
+    isLoading: isPending,
+    user: user ?? null,
+    logout: () => logoutMutation.mutate(),
   }
 }
-
-export { isLoggedIn }
-export default useAuth

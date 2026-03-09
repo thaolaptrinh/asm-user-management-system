@@ -1,225 +1,239 @@
 # ============== VARIABLES ==============
-INFRA := db adminer mailcatcher
-APP := frontend backend
-DEV := $(INFRA) $(APP)
+DEV_PROJECT  := dev
+TEST_PROJECT := test
 
-# ============== HELP ==============
+DC        := docker compose --env-file .env
+DC_BASE   := $(DC) -f docker/compose.base.yml
+
+DB_CONNECTION ?= mysql
+DB_SERVICE    := db-$(DB_CONNECTION)
+
+DC_DEV    := $(DC_BASE) -f docker/compose.dev.yml --profile $(DB_CONNECTION)
+DC_TEST   := $(DC_BASE) -f docker/compose.test.yml -p $(TEST_PROJECT)
+DC_STAGE  := $(DC_BASE) -f docker/compose.staging.yml
+DC_PROD   := $(DC_BASE) -f docker/compose.prod.yml
+
+.SHELL := /bin/bash
+.ONESHELL:
+
+.DEFAULT_GOAL := help
+
 .PHONY: help
 help:
-	@echo "Usage: make [target]"
-	@echo ""
-	@echo "Development:"
-	@echo "  dev       Start all services with watch (frontend :3000, backend :8000; no proxy, no port 80)"
-	@echo "  dev-full  Start all services with proxy (production-like, requires port 80)"
-	@echo "  dev-fe     Start frontend only"
-	@echo "  dev-be     Start backend only"
-	@echo "  up         Start infrastructure only"
-	@echo "  down       Stop all services"
-	@echo "  logs      View logs (follow; holds compose lock)"
-	@echo "  logs-tail View last 200 log lines (one-shot; use in another terminal while dev runs)"
-	@echo "  ps        Show running containers"
-	@echo ""
-	@echo "Database:"
-	@echo "  migrate           Run pending migrations"
-	@echo "  migrate-fresh     Drop all tables, re-run all (stamp + downgrade + upgrade)"
-	@echo "  migrate-rollback  Rollback last migration"
-	@echo "  migrate-reset     Rollback all migrations"
-	@echo "  migrate-status    Show current revision"
-	@echo "  migrate-stamp     Mark DB at head without running migrations"
-	@echo "  migration         Generate migration (e.g. make migration create_users_table)"
-	@echo "  seed              Seed database"
-	@echo "  db-reset          Delete DB volume and run prestart"
-	@echo ""
-	@echo "Tools:"
-	@echo "  test             Run all tests (backend + frontend)"
-	@echo "  test-cov         Backend tests with coverage"
-	@echo "  test-cov-100     Backend coverage, fail if < 100%"
-	@echo "  test-unit        Frontend unit tests with coverage"
-	@echo "  test-unit-ui     Frontend unit tests (Vitest UI)"
-	@echo "  test-e2e         E2E tests (Playwright)"
-	@echo "  lint             Lint frontend + backend"
-	@echo "  format           Format backend (ruff)"
-	@echo "  build            Build images"
-	@echo "  clean            Remove generated files and deps"
+	@awk 'BEGIN{FS=":.*##"} /^[a-zA-Z_-]+:.*##/{printf "  \033[36m%-20s\033[0m %s\n",$$1,$$2}' $(MAKEFILE_LIST)
+
+# ============== SETUP ==============
+.PHONY: init
+init: ## First-time setup: copy env, generate secrets
+	@cp .env.example .env
+	@echo "Generated .env - now run 'make secrets' to fill secrets"
+
+.PHONY: secrets
+secrets: ## Generate secure secret values for .env
+	@bash scripts/generate-secrets.sh
 
 # ============== DEVELOPMENT ==============
 .PHONY: dev
-dev: up kill-watch
-	docker compose watch
+dev: ## Start all services with hot-reload via docker compose watch (blocks terminal)
+	$(DC_DEV) watch
 
-.PHONY: dev-full
-dev-full:
-	docker compose up -d $(DEV)
-	@echo "Waiting for services..." && for i in $$(seq 1 60); do docker compose ps frontend backend 2>/dev/null | grep -q "Up" && break || sleep 2; done
+.PHONY: dev-build
+dev-build: ## Rebuild images then start with hot-reload (NO_CACHE=1 for no-cache)
+	$(DC_DEV) build $(if $(NO_CACHE),--no-cache,)
+	$(DC_DEV) watch
 
-.PHONY: dev-fe
-dev-fe:
-	docker compose up -d frontend
+.PHONY: restart
+restart: ## Restart all services
+	$(DC_DEV) restart
 
-.PHONY: dev-be
-dev-be:
-	docker compose up -d backend
-
-.PHONY: up
-up:
-	docker compose up -d $(INFRA) --remove-orphans
-
-# Release project lock: Docker Compose watch does not always release lock on Ctrl+C
-# or terminal close (see docker/compose#11069). (1) Linux: kill watch process with
-# cwd=this project. (2) macOS fallback: run watch --no-up in background, parse
-# "PID X is still running" or kill the background job after 2s so we don't leave it running.
-kill-watch:
-	@./scripts/kill-watch.sh
+.PHONY: stop
+stop: ## Stop all services
+	$(DC_DEV) stop
 
 .PHONY: down
-down: kill-watch
-	docker compose --profile proxy --profile tools down --remove-orphans
-
-.PHONY: logs
-logs:
-	docker compose logs -f
-
-.PHONY: logs-tail
-logs-tail:
-	docker compose logs --tail=200
-
-.PHONY: ps
-ps:
-	docker compose ps
-
-# ============== DATABASE ==============
-
-.PHONY: migrate
-migrate:
-	@current=$$(docker compose exec -T backend alembic current 2>/dev/null | tail -1); \
-	head=$$(docker compose exec -T backend alembic heads 2>/dev/null | tail -1); \
-	if [ "$$current" = "$$head" ] && [ -n "$$head" ]; then \
-	  echo "Nothing to migrate. Already up to date."; \
-	else \
-	  docker compose exec -T backend alembic upgrade head; \
-	fi
-
-# Refresh DB = reset (downgrade base) + migrate (upgrade head).
-# Stamp head first so if DB has old tables but alembic_version is wrong/empty, downgrade still works.
-.PHONY: migrate-fresh
-migrate-fresh:
-	docker compose exec -T backend alembic stamp head
-	docker compose exec -T backend sh -c 'while rev=$$(alembic current 2>/dev/null | tail -1) && [ -n "$$rev" ]; do alembic downgrade -1; done'
-	docker compose exec -T backend alembic upgrade head
-
-.PHONY: migrate-rollback
-migrate-rollback:
-	@current=$$(docker compose exec -T backend alembic current 2>/dev/null | tail -1); \
-	if [ -z "$$current" ]; then \
-	  echo "Nothing to roll back. Already at base."; \
-	else \
-	  docker compose exec -T backend alembic downgrade -1; \
-	fi
-
-# Reset only: bring DB to base (step-by-step downgrade). Don't re-run migrate.
-# Use repeated downgrade -1 instead of "downgrade base" to avoid "0 found" error when deleting rows in alembic_version.
-.PHONY: migrate-reset
-migrate-reset:
-	@current=$$(docker compose exec -T backend alembic current 2>/dev/null | tail -1); \
-	if [ -z "$$current" ]; then \
-	  echo "Already at base. Nothing to reset."; \
-	else \
-	  docker compose exec -T backend sh -c 'while rev=$$(alembic current 2>/dev/null | tail -1) && [ -n "$$rev" ]; do alembic downgrade -1; done'; \
-	fi
-
-.PHONY: db-reset
-db-reset:
-	docker compose stop db
-	docker volume rm fastapi-nextjs-template_app-db-data 2>/dev/null || true
-	docker compose up -d db
-	@echo "Waiting for DB..." && for i in $$(seq 1 30); do docker compose ps db 2>/dev/null | grep -q "healthy\|Up" && break || sleep 2; done
-	docker compose run --rm prestart
-
-.PHONY: migrate-status
-migrate-status:
-	docker compose exec -T backend alembic current
-
-.PHONY: migrate-stamp
-migrate-stamp:
-	docker compose exec -T backend alembic stamp head
-
-.PHONY: migration
-migration:
-	@M="$(word 2,$(MAKECMDGOALS))"; \
-	if [ -z "$$M" ]; then echo "Usage: make migration create_users_table"; exit 1; fi; \
-	docker compose exec -T --user $$(id -u):$$(id -g) backend alembic revision --autogenerate -m "$$M"
-
-.PHONY: seed
-seed:
-	docker compose exec -T -e PYTHONPATH=/app/backend backend python app/initial_data.py
-
-# Test DB: name = MYSQL_DATABASE from .env + _test (scripts read .env). Override: make test MYSQL_TEST_DATABASE=xxx_test
-MYSQL_TEST_DATABASE ?= app_test
-
-# ============== TOOLS ==============
-
-.PHONY: test
-test:
-	./scripts/run-backend-tests.sh cov
-	. ./.env 2>/dev/null || true; \
-	docker compose exec -T \
-		-e FIRST_SUPERUSER="$$FIRST_SUPERUSER" \
-		-e FIRST_SUPERUSER_PASSWORD="$$FIRST_SUPERUSER_PASSWORD" \
-		-e VITEST_COVERAGE_DIR=/tmp/frontend-coverage \
-		frontend sh -c 'cd /app/frontend && bun install && bun run test:coverage'
-
-.PHONY: test-unit
-test-unit:
-	docker compose exec -T -e VITEST_COVERAGE_DIR=/tmp/frontend-coverage frontend sh -c 'cd /app/frontend && bun install && bun run test:coverage'
-
-.PHONY: test-unit-ui
-test-unit-ui:
-	docker compose exec -T frontend sh -c 'cd /app/frontend && bun install && bun run test:ui'
-
-# Component/browser tests disabled (path alias issue). Use test-e2e for E2E.
-.PHONY: test-browser
-test-browser:
-	@echo "Browser tests disabled. Run E2E instead: make test-e2e"
-
-# E2E: ensure backend is up so run container joins same network and can resolve "backend". FIRST_SUPERUSER from .env.
-# Use --no-recreate on up and --no-deps on run so existing backend (e.g. from make dev) is not recreated.
-.PHONY: test-e2e
-test-e2e:
-	docker compose up -d --no-recreate --wait backend
-	docker compose up -d --no-recreate mailcatcher
-	if [ -t 1 ]; then \
-	  docker compose run --rm --no-deps -t -e CI=0 playwright bun run test:e2e -- --reporter=list --max-failures=1 --retries=0; \
-	else \
-	  docker compose run --rm --no-deps -e CI=0 playwright bun run test:e2e -- --reporter=list --max-failures=1 --retries=0; \
-	fi
-
-.PHONY: test-cov
-test-cov:
-	./scripts/run-backend-tests.sh cov
-
-.PHONY: test-cov-100
-test-cov-100:
-	./scripts/run-backend-tests.sh cov-100
-
-.PHONY: lint
-lint:
-	docker compose exec -T frontend bun run lint
-	docker compose run --rm --user root -v "$$(pwd)/backend:/app/backend:rw" -w /app/backend -e RUFF_CACHE_DIR=/tmp/.ruff_cache backend ruff check . --fix
-
-.PHONY: format
-format:
-	docker compose run --rm --user root -v "$$(pwd)/backend:/app/backend:rw" -w /app/backend -e RUFF_CACHE_DIR=/tmp/.ruff_cache backend ruff format .
-
-.PHONY: build
-build:
-	docker compose build
+down: ## Stop and remove containers
+	$(DC_DEV) down --remove-orphans
 
 .PHONY: clean
-clean:
-	docker compose down
-	rm -rf backend/.venv frontend/node_modules node_modules
-	@echo "Note: frontend/.next may need manual removal (created by Docker)"
+clean: ## Stop and remove containers + volumes (DESTRUCTIVE)
+	$(DC_DEV) down -v --remove-orphans
 
-# Catch-all so extra goals (e.g. make migration foo) don't cause "No rule to make target"
-%:
-	@:
+.PHONY: ps
+ps: ## Show running containers
+	$(DC_DEV) ps
+
+# ============== LOGS ==============
+.PHONY: logs
+logs: ## All logs
+	$(DC_DEV) logs -f
+
+.PHONY: logs-be
+logs-be: ## Backend logs
+	$(DC_DEV) logs -f backend
+
+.PHONY: logs-fe
+logs-fe: ## Frontend logs
+	$(DC_DEV) logs -f frontend
+
+.PHONY: logs-db
+logs-db: ## Database logs
+	$(DC_DEV) logs -f $(DB_SERVICE)
+
+# ============== SHELL ACCESS ==============
+.PHONY: shell-be
+shell-be: ## Open shell in backend container
+	$(DC_DEV) exec backend bash
+
+.PHONY: shell-fe
+shell-fe: ## Open shell in frontend container
+	$(DC_DEV) exec frontend sh
+
+.PHONY: shell-db
+shell-db: ## Open database shell (MySQL or PostgreSQL based on DB_CONNECTION)
+	@if [ "$(DB_CONNECTION)" = "postgres" ]; then \
+		$(DC_DEV) exec $(DB_SERVICE) psql -U $${DB_USERNAME} -d $${DB_DATABASE}; \
+	else \
+		$(DC_DEV) exec -e MYSQL_PWD="$${DB_PASSWORD}" $(DB_SERVICE) mysql -u$${DB_USERNAME} $${DB_DATABASE}; \
+	fi
+
+# ============== DATABASE ==============
+.PHONY: migrate
+migrate: ## Run pending migrations
+	$(DC_DEV) exec backend alembic upgrade head
+
+.PHONY: migrate-fresh
+migrate-fresh: ## Drop all tables (bypasses down migrations) and re-run all migrations
+	$(DC_DEV) exec backend python -c \
+		"from sqlalchemy import create_engine; from app.core.config import settings; from app.db.base import Base; e = create_engine(settings.DATABASE_URL_SYNC); Base.metadata.drop_all(e); e.dispose()"
+	$(DC_DEV) exec backend alembic upgrade head
+
+.PHONY: migrate-rollback
+migrate-rollback: ## Rollback the last migration
+	$(DC_DEV) exec backend alembic downgrade -1
+
+.PHONY: migrate-reset
+migrate-reset: ## Rollback all migrations
+	$(DC_DEV) exec backend alembic downgrade base
+
+.PHONY: migrate-refresh
+migrate-refresh: ## Rollback all migrations and re-run
+	$(DC_DEV) exec backend alembic downgrade base
+	$(DC_DEV) exec backend alembic upgrade head
+
+.PHONY: migrate-status
+migrate-status: ## Show migration status
+	$(DC_DEV) exec backend alembic current -v
+
+.PHONY: migrate-make
+migrate-make: ## Create new migration: make migrate-make m="create_users_table"
+	$(DC_DEV) exec backend alembic revision --autogenerate -m "$(m)"
+
+.PHONY: seed
+seed: ## Seed the database
+	$(DC_DEV) exec backend python -m app.db.seed
+
+.PHONY: db-reset
+db-reset: ## Reset database: drop, recreate, migrate, seed
+	$(DC_DEV) stop $(DB_SERVICE)
+	$(DC_DEV) rm -fv $(DB_SERVICE)
+	$(DC_DEV) up -d --wait $(DB_SERVICE)
+	$(MAKE) migrate-fresh seed
+
+# ============== CODE GENERATION ==============
+.PHONY: generate-client
+generate-client: ## Generate TypeScript client from OpenAPI (manual, one-time)
+	@bash scripts/generate-client.sh
+
+.PHONY: generate-client-watch
+generate-client-watch: ## Auto-generate TypeScript client on API changes (dev only)
+	$(DC_DEV) up -d codegen
+
+# ============== TESTING ==============
+.PHONY: test
+test: ## Run all tests
+	$(MAKE) test-be
+	$(MAKE) test-fe
+
+# Always builds first (Docker cache makes this ~2s when deps unchanged).
+# Source code is bind-mounted — changes reflected without rebuild.
+.PHONY: test-be
+test-be: ## Backend tests with coverage
+	$(DC_TEST) --profile $(DB_CONNECTION) up -d --wait $(DB_SERVICE)
+	$(DC_TEST) --profile $(DB_CONNECTION) run --build --rm --use-aliases backend \
+		sh -c "alembic upgrade head && python -m app.db.seed && pytest tests/ -v --cov=app --cov-report=term-missing"; \
+	EXIT=$$?; $(DC_TEST) down; exit $$EXIT
+
+.PHONY: test-be-reset
+test-be-reset: ## Backend tests — destroy DB volume after run (fully clean slate)
+	$(DC_TEST) --profile $(DB_CONNECTION) up -d --wait $(DB_SERVICE)
+	$(DC_TEST) --profile $(DB_CONNECTION) run --build --rm --use-aliases backend \
+		sh -c "alembic upgrade head && python -m app.db.seed && pytest tests/ -v --cov=app --cov-report=term-missing"; \
+	EXIT=$$?; $(DC_TEST) down -v; exit $$EXIT
+
+.PHONY: test-fe
+test-fe: ## Frontend tests with coverage
+	$(DC_DEV) exec frontend bun run test:coverage
+
+.PHONY: test-e2e
+test-e2e: ## E2E tests - local dev (fast, base image with runtime install)
+	$(DC_DEV) --profile e2e up -d --wait
+	$(DC_DEV) --profile e2e run --rm playwright
+
+.PHONY: test-e2e-ci
+test-e2e-ci: ## E2E tests - CI/CD (deterministic, pre-built Docker image)
+	$(DC_TEST) --profile $(DB_CONNECTION) --profile e2e up -d --wait
+	$(DC_TEST) --profile e2e run --rm --build playwright; \
+	EXIT=$$?; $(DC_TEST) down; exit $$EXIT
+
+# ============== CODE QUALITY ==============
+.PHONY: lint
+lint: ## Lint backend + frontend
+	$(DC_DEV) exec backend ruff check .
+	$(DC_DEV) exec frontend bun run lint
+
+.PHONY: lint-be
+lint-be: ## Lint backend only
+	$(DC_DEV) exec backend ruff check .
+
+.PHONY: lint-fe
+lint-fe: ## Lint frontend only
+	$(DC_DEV) exec frontend bun run lint
+
+.PHONY: typecheck
+typecheck: ## Type-check backend + frontend
+	$(DC_DEV) exec backend mypy app
+	$(DC_DEV) exec frontend bun run typecheck
+
+.PHONY: typecheck-be
+typecheck-be: ## Type-check backend only
+	$(DC_DEV) exec backend mypy app
+
+.PHONY: typecheck-fe
+typecheck-fe: ## Type-check frontend only
+	$(DC_DEV) exec frontend bun run typecheck
+
+.PHONY: check
+check: lint typecheck ## Run all checks
+
+# ============== BUILD ==============
+.PHONY: build
+build: ## Build all images
+	$(DC_BASE) --profile $(DB_CONNECTION) build
+
+.PHONY: build-prod
+build-prod: ## Build production images
+	$(DC_PROD) build
+
+.PHONY: build-no-cache
+build-no-cache: ## Build with no cache
+	$(DC_BASE) --profile $(DB_CONNECTION) build --no-cache
+
+# ============== UTILITIES ==============
+.PHONY: prune
+prune: ## Remove unused Docker resources
+	docker system prune -f
+
+.PHONY: env
+env: ## Show current environment variables
+	@echo "APP_ENV=$${APP_ENV:-local}"
+	@echo "DB_DATABASE=$${DB_DATABASE:-app}"

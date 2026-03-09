@@ -1,0 +1,126 @@
+services:
+  db-mysql:
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}_test
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  db-postgres:
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}_test
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}_test" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  prestart:
+    command: echo "skipped for tests"
+    profiles: [ "skip" ]
+
+  backend:
+    build:
+      target: development
+    # Bind-mount source and tests over the baked-in COPY layers.
+    # Image only needs rebuilding when pyproject.toml / uv.lock changes
+    # (i.e. new dependencies), not on every source edit.
+    volumes:
+      - ../backend/app:/app/app
+      - ../backend/tests:/app/tests
+      # Write htmlcov to host so CI can upload it as an artifact.
+      - ../backend/htmlcov:/app/htmlcov
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_DATABASE: ${DB_DATABASE}_test
+      RATE_LIMIT_ENABLED: "false"
+    depends_on:
+      db-mysql:
+        condition: service_healthy
+        required: false
+      db-postgres:
+        condition: service_healthy
+        required: false
+      prestart:
+        condition: service_completed_successfully
+        required: false
+    command: >
+      pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=html
+
+  frontend:
+    build:
+      target: development
+    volumes:
+      - ../frontend/src:/app/src
+    environment:
+      NODE_ENV: test
+    command: bun run test:coverage
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.58.2-noble
+    profiles: [ "e2e" ]
+    working_dir: /app
+    volumes:
+      - ../frontend:/app
+      - playwright-node-modules:/app/node_modules
+    environment:
+      BASE_URL: http://frontend:3000
+      PLAYWRIGHT_BASE_URL: http://frontend:3000
+      CI: "true"
+      PLAYWRIGHT_SKIP_WEB_SERVER: "1"
+      FIRST_SUPERUSER: ${FIRST_SUPERUSER}
+      FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD}
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    command: >
+      sh -c "
+        npm install &&
+        npx playwright test --reporter=html
+      "
+    ipc: host
+    networks:
+      - app-network
+
+# Override the named volume definitions from compose.base.yml.
+#
+# The `volumes` top-level section is a MAP, not a list — Docker Compose
+# REPLACES (not appends) entries with the same key when merging files.
+# The service mounts in compose.base.yml still reference `db-mysql-data`
+# by name; only the *backing storage* changes to in-memory tmpfs.
+#
+# `driver: local` with `type=tmpfs` creates a named volume whose data lives
+# in RAM. The volume object persists in Docker across `down` (without -v),
+# but tmpfs contents are always empty when a new container mounts it —
+# so MySQL always runs /docker-entrypoint-initdb.d and creates the _test DB.
+#
+# A test-specific `name` prevents any collision with the dev named volume,
+# even if -p test is not used.
+volumes:
+  db-mysql-data:
+    name: ${STACK_NAME:-app}-test-db-mysql-data
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=512m,noexec,nosuid
+  db-postgres-data:
+    name: ${STACK_NAME:-app}-test-db-postgres-data
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=512m,noexec,nosuid
+  playwright-node-modules:
+
+
+networks:
+  app-network:
+    name: ${STACK_NAME:-app}-test-network

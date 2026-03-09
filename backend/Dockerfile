@@ -1,66 +1,72 @@
-ARG PYTHON_VERSION=3.10
-ARG UV_VERSION=0.9.26
+ARG UV_VERSION=0.5.20
 
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
-# ── Base ──────────────────────────────────────────────────────────────
-FROM python:${PYTHON_VERSION}-slim-bookworm AS base
+FROM python:3.12-slim AS base
 
-COPY --from=uv /uv /uvx /bin/
-
-ENV PYTHONUNBUFFERED=1 \
-    UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
-    PATH="/app/.venv/bin:$PATH"
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# ── Dependencies ──────────────────────────────────────────────────────
-FROM base AS dependencies
-
-COPY backend/pyproject.toml backend/alembic.ini uv.lock ./
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-workspace --package app
-
-RUN uv pip install pymysql cryptography
-
-# ── Builder ───────────────────────────────────────────────────────────
+# ── Builder: install runtime deps only (no source, layer-cached) ───────
 FROM base AS builder
 
-COPY --from=dependencies /app/.venv /app/.venv
-COPY backend/scripts /app/backend/scripts
-COPY backend/pyproject.toml backend/alembic.ini /app/backend/
-COPY backend/app /app/backend/app
-COPY backend/migrations /app/backend/migrations
-COPY backend/tests /app/backend/tests
+COPY --from=uv /uv /usr/local/bin/uv
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/app/.venv
+
+COPY backend/pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-workspace
+
+# ── Development: add dev deps, source baked in + synced via compose watch
+FROM builder AS development
+
+# Copy source BEFORE uv sync so editable/workspace install can find it
+COPY backend/app ./app
+COPY backend/alembic ./alembic
+COPY backend/alembic.ini ./alembic.ini
+COPY backend/tests ./tests
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=backend/pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --package app
+    uv sync --frozen
 
-# ── Runner ────────────────────────────────────────────────────────────
-FROM python:${PYTHON_VERSION}-slim-bookworm AS runner
+ENV PATH="/app/.venv/bin:$PATH"
 
-LABEL org.opencontainers.image.title="backend" \
-      org.opencontainers.image.description="FastAPI backend"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
 
-ENV PYTHONUNBUFFERED=1 \
-    PATH="/app/.venv/bin:$PATH"
+CMD ["uvicorn", "app.main:app", \
+     "--host", "0.0.0.0", "--port", "8000", \
+     "--reload", "--reload-dir", "/app/app", \
+     "--log-level", "debug"]
 
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+# ── Production: minimal image, non-root user ──────────────────────────
+FROM base AS production
 
-WORKDIR /app
+# Create non-root user before COPY to use --chown (avoids extra layer)
+RUN groupadd --system --gid 1001 appgroup && \
+    useradd --system --gid appgroup --uid 1001 --shell /bin/false appuser
 
-COPY --from=dependencies --chown=appuser:appuser /app/.venv /app/.venv
-COPY --from=builder --chown=appuser:appuser /app/backend /app/backend
+COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
 
-WORKDIR /app/backend
+COPY --chown=appuser:appgroup backend/app ./app
+COPY --chown=appuser:appgroup backend/alembic ./alembic
+COPY --chown=appuser:appgroup backend/alembic.ini ./alembic.ini
+
 USER appuser
+
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/utils/health-check/')"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
 
-CMD ["fastapi", "run", "--workers", "4", "app/main.py"]
+# exec replaces the shell so SIGTERM reaches uvicorn directly (graceful shutdown)
+# Shell form used here to expand ${WEB_CONCURRENCY:-2} at runtime
+CMD exec uvicorn app.main:app \
+    --host 0.0.0.0 --port 8000 \
+    --workers ${WEB_CONCURRENCY:-2} --log-level info

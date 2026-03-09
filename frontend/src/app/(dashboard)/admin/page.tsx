@@ -2,12 +2,12 @@
 import { useQuery } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
-import { Users } from "@/client"
+import { users as usersApi } from "@/client/sdk.gen"
 import AddUser from "@/components/admin/AddUser"
 import { columns, type UserTableData } from "@/components/admin/columns"
 import { DataTable } from "@/components/data-table"
 import PendingUsers from "@/components/pending/PendingUsers"
-import useAuth from "@/hooks/useAuth"
+import { useAuth } from "@/hooks/useAuth"
 
 export default function AdminPage() {
   const { user } = useAuth()
@@ -21,11 +21,12 @@ export default function AdminPage() {
 
   const { data: response, isLoading } = useQuery({
     queryKey: ["users"],
-    queryFn: () => Users.readUsers({ throwOnError: true }).then((r) => r.data),
+    queryFn: () =>
+      usersApi.listUsers({ throwOnError: true }).then((r) => r.data),
     enabled: !!user?.is_superuser,
   })
 
-  const users: UserTableData[] = (response?.data ?? []).map((u) => ({
+  const userList: UserTableData[] = (response?.data ?? []).map((u) => ({
     ...u,
     isCurrentUser: u.email === user?.email,
   }))
@@ -45,7 +46,7 @@ export default function AdminPage() {
       ) : (
         <>
           <AddUser />
-          <DataTable columns={columns} data={users} />
+          <DataTable columns={columns} data={userList} />
         </>
       )}
     </div>

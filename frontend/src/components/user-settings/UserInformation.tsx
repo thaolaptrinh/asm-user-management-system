@@ -4,8 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-
-import { Users, type UserUpdateMe } from "@/client"
+import { type UserUpdateMe, users } from "@/client"
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -17,7 +16,7 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
-import useAuth from "@/hooks/useAuth"
+import { useAuth } from "@/hooks/useAuth"
 import useCustomToast from "@/hooks/useCustomToast"
 import { cn, handleError } from "@/lib/utils"
 
@@ -50,7 +49,7 @@ const UserInformation = () => {
 
   const mutation = useMutation({
     mutationFn: (body: UserUpdateMe) =>
-      Users.updateUserMe({ body, throwOnError: true }).then((r) => r.data),
+      users.updateMe({ body, throwOnError: true }).then((r) => r.data),
     onSuccess: () => {
       showSuccessToast("User updated successfully")
       toggleEditMode()

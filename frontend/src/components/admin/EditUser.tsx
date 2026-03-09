@@ -5,8 +5,7 @@ import { Pencil } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-
-import { type UserPublic, Users } from "@/client"
+import { type UserPublic, users } from "@/client"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -77,8 +76,8 @@ const EditUser = ({ user, onSuccess }: EditUserProps) => {
   const mutation = useMutation({
     mutationFn: (opts: {
       path: { user_id: string }
-      body: Parameters<typeof Users.updateUser>[0]["body"]
-    }) => Users.updateUser({ ...opts, throwOnError: true }).then((r) => r.data),
+      body: Parameters<typeof users.updateUser>[0]["body"]
+    }) => users.updateUser({ ...opts, throwOnError: true }).then((r) => r.data),
     onSuccess: () => {
       showSuccessToast("User updated successfully")
       setIsOpen(false)
@@ -97,7 +96,7 @@ const EditUser = ({ user, onSuccess }: EditUserProps) => {
     }
     mutation.mutate({
       path: { user_id: user.id },
-      body: submitData as Parameters<typeof Users.updateUser>[0]["body"],
+      body: submitData as Parameters<typeof users.updateUser>[0]["body"],
     })
   }
 

@@ -5,9 +5,9 @@ export type ClientOptions = {
 };
 
 /**
- * Body_login-login_access_token
+ * Body_login
  */
-export type BodyLoginLoginAccessToken = {
+export type BodyLogin = {
     /**
      * Grant Type
      */
@@ -78,10 +78,6 @@ export type ItemPublic = {
      * Owner Id
      */
     owner_id: string;
-    /**
-     * Created At
-     */
-    created_at?: string | null;
 };
 
 /**
@@ -99,20 +95,6 @@ export type ItemUpdate = {
 };
 
 /**
- * ItemsPublic
- */
-export type ItemsPublic = {
-    /**
-     * Data
-     */
-    data: Array<ItemPublic>;
-    /**
-     * Count
-     */
-    count: number;
-};
-
-/**
  * Message
  */
 export type Message = {
@@ -123,45 +105,47 @@ export type Message = {
 };
 
 /**
- * NewPassword
+ * PaginatedResponse[ItemPublic]
  */
-export type NewPassword = {
+export type PaginatedResponseItemPublic = {
     /**
-     * Token
+     * Data
      */
-    token: string;
+    data: Array<ItemPublic>;
     /**
-     * New Password
+     * Count
      */
-    new_password: string;
+    count: number;
+    /**
+     * Skip
+     */
+    skip: number;
+    /**
+     * Limit
+     */
+    limit: number;
 };
 
 /**
- * Token
+ * PaginatedResponse[UserPublic]
  */
-export type Token = {
+export type PaginatedResponseUserPublic = {
     /**
-     * Access Token
+     * Data
      */
-    access_token: string;
+    data: Array<UserPublic>;
     /**
-     * Token Type
+     * Count
      */
-    token_type?: string;
-};
-
-/**
- * UpdatePassword
- */
-export type UpdatePassword = {
+    count: number;
     /**
-     * Current Password
+     * Skip
      */
-    current_password: string;
+    skip: number;
     /**
-     * New Password
+     * Limit
      */
-    new_password: string;
+    limit: number;
 };
 
 /**
@@ -173,6 +157,10 @@ export type UserCreate = {
      */
     email: string;
     /**
+     * Full Name
+     */
+    full_name?: string | null;
+    /**
      * Is Active
      */
     is_active?: boolean;
@@ -180,10 +168,6 @@ export type UserCreate = {
      * Is Superuser
      */
     is_superuser?: boolean;
-    /**
-     * Full Name
-     */
-    full_name?: string | null;
     /**
      * Password
      */
@@ -199,6 +183,10 @@ export type UserPublic = {
      */
     email: string;
     /**
+     * Full Name
+     */
+    full_name?: string | null;
+    /**
      * Is Active
      */
     is_active?: boolean;
@@ -207,21 +195,9 @@ export type UserPublic = {
      */
     is_superuser?: boolean;
     /**
-     * Full Name
-     */
-    full_name?: string | null;
-    /**
      * Id
      */
     id: string;
-    /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Updated At
-     */
-    updated_at?: string | null;
 };
 
 /**
@@ -243,6 +219,22 @@ export type UserRegister = {
 };
 
 /**
+ * UserResetPasswordToken
+ *
+ * Schema for password reset token validation.
+ */
+export type UserResetPasswordToken = {
+    /**
+     * Token
+     */
+    token: string;
+    /**
+     * New Password
+     */
+    new_password: string;
+};
+
+/**
  * UserUpdate
  */
 export type UserUpdate = {
@@ -251,14 +243,6 @@ export type UserUpdate = {
      */
     email?: string | null;
     /**
-     * Is Active
-     */
-    is_active?: boolean;
-    /**
-     * Is Superuser
-     */
-    is_superuser?: boolean;
-    /**
      * Full Name
      */
     full_name?: string | null;
@@ -266,6 +250,10 @@ export type UserUpdate = {
      * Password
      */
     password?: string | null;
+    /**
+     * Is Active
+     */
+    is_active?: boolean | null;
 };
 
 /**
@@ -273,27 +261,13 @@ export type UserUpdate = {
  */
 export type UserUpdateMe = {
     /**
-     * Full Name
-     */
-    full_name?: string | null;
-    /**
      * Email
      */
     email?: string | null;
-};
-
-/**
- * UsersPublic
- */
-export type UsersPublic = {
     /**
-     * Data
+     * Full Name
      */
-    data: Array<UserPublic>;
-    /**
-     * Count
-     */
-    count: number;
+    full_name?: string | null;
 };
 
 /**
@@ -324,133 +298,169 @@ export type ValidationError = {
     };
 };
 
-export type LoginLoginAccessTokenData = {
-    body: BodyLoginLoginAccessToken;
+export type LoginData = {
+    body: BodyLogin;
     path?: never;
     query?: never;
-    url: '/api/v1/login/access-token';
+    url: '/api/v1/auth/login';
 };
 
-export type LoginLoginAccessTokenErrors = {
+export type LoginErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type LoginLoginAccessTokenError = LoginLoginAccessTokenErrors[keyof LoginLoginAccessTokenErrors];
+export type LoginError = LoginErrors[keyof LoginErrors];
 
-export type LoginLoginAccessTokenResponses = {
+export type LoginResponses = {
     /**
      * Successful Response
      */
-    200: Token;
+    200: Message;
 };
 
-export type LoginLoginAccessTokenResponse = LoginLoginAccessTokenResponses[keyof LoginLoginAccessTokenResponses];
+export type LoginResponse = LoginResponses[keyof LoginResponses];
 
-export type LoginTestTokenData = {
+export type LogoutData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/v1/login/test-token';
+    url: '/api/v1/auth/logout';
 };
 
-export type LoginTestTokenResponses = {
+export type LogoutResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
+
+export type RegisterData = {
+    body: UserRegister;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/register';
+};
+
+export type RegisterErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RegisterError = RegisterErrors[keyof RegisterErrors];
+
+export type RegisterResponses = {
+    /**
+     * Successful Response
+     */
+    201: Message;
+};
+
+export type RegisterResponse = RegisterResponses[keyof RegisterResponses];
+
+export type RecoverPasswordData = {
+    body?: never;
+    path: {
+        /**
+         * Email
+         */
+        email: string;
+    };
+    query?: never;
+    url: '/api/v1/auth/password-recovery/{email}';
+};
+
+export type RecoverPasswordErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RecoverPasswordError = RecoverPasswordErrors[keyof RecoverPasswordErrors];
+
+export type RecoverPasswordResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type RecoverPasswordResponse = RecoverPasswordResponses[keyof RecoverPasswordResponses];
+
+export type ResetPasswordData = {
+    body: UserResetPasswordToken;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/reset-password/';
+};
+
+export type ResetPasswordErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ResetPasswordError = ResetPasswordErrors[keyof ResetPasswordErrors];
+
+export type ResetPasswordResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type ResetPasswordResponse = ResetPasswordResponses[keyof ResetPasswordResponses];
+
+export type GetMeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/users/me';
+};
+
+export type GetMeResponses = {
     /**
      * Successful Response
      */
     200: UserPublic;
 };
 
-export type LoginTestTokenResponse = LoginTestTokenResponses[keyof LoginTestTokenResponses];
+export type GetMeResponse = GetMeResponses[keyof GetMeResponses];
 
-export type LoginRecoverPasswordData = {
-    body?: never;
-    path: {
-        /**
-         * Email
-         */
-        email: string;
-    };
-    query?: never;
-    url: '/api/v1/password-recovery/{email}';
-};
-
-export type LoginRecoverPasswordErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type LoginRecoverPasswordError = LoginRecoverPasswordErrors[keyof LoginRecoverPasswordErrors];
-
-export type LoginRecoverPasswordResponses = {
-    /**
-     * Successful Response
-     */
-    200: Message;
-};
-
-export type LoginRecoverPasswordResponse = LoginRecoverPasswordResponses[keyof LoginRecoverPasswordResponses];
-
-export type LoginResetPasswordData = {
-    body: NewPassword;
+export type UpdateMeData = {
+    body: UserUpdateMe;
     path?: never;
     query?: never;
-    url: '/api/v1/reset-password/';
+    url: '/api/v1/users/me';
 };
 
-export type LoginResetPasswordErrors = {
+export type UpdateMeErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type LoginResetPasswordError = LoginResetPasswordErrors[keyof LoginResetPasswordErrors];
+export type UpdateMeError = UpdateMeErrors[keyof UpdateMeErrors];
 
-export type LoginResetPasswordResponses = {
+export type UpdateMeResponses = {
     /**
      * Successful Response
      */
-    200: Message;
+    200: UserPublic;
 };
 
-export type LoginResetPasswordResponse = LoginResetPasswordResponses[keyof LoginResetPasswordResponses];
+export type UpdateMeResponse = UpdateMeResponses[keyof UpdateMeResponses];
 
-export type LoginRecoverPasswordHtmlContentData = {
-    body?: never;
-    path: {
-        /**
-         * Email
-         */
-        email: string;
-    };
-    query?: never;
-    url: '/api/v1/password-recovery-html-content/{email}';
-};
-
-export type LoginRecoverPasswordHtmlContentErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type LoginRecoverPasswordHtmlContentError = LoginRecoverPasswordHtmlContentErrors[keyof LoginRecoverPasswordHtmlContentErrors];
-
-export type LoginRecoverPasswordHtmlContentResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type LoginRecoverPasswordHtmlContentResponse = LoginRecoverPasswordHtmlContentResponses[keyof LoginRecoverPasswordHtmlContentResponses];
-
-export type UsersReadUsersData = {
+export type ListUsersData = {
     body?: never;
     path?: never;
     query?: {
@@ -466,157 +476,50 @@ export type UsersReadUsersData = {
     url: '/api/v1/users/';
 };
 
-export type UsersReadUsersErrors = {
+export type ListUsersErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type UsersReadUsersError = UsersReadUsersErrors[keyof UsersReadUsersErrors];
+export type ListUsersError = ListUsersErrors[keyof ListUsersErrors];
 
-export type UsersReadUsersResponses = {
+export type ListUsersResponses = {
     /**
      * Successful Response
      */
-    200: UsersPublic;
+    200: PaginatedResponseUserPublic;
 };
 
-export type UsersReadUsersResponse = UsersReadUsersResponses[keyof UsersReadUsersResponses];
+export type ListUsersResponse = ListUsersResponses[keyof ListUsersResponses];
 
-export type UsersCreateUserData = {
+export type CreateUserData = {
     body: UserCreate;
     path?: never;
     query?: never;
     url: '/api/v1/users/';
 };
 
-export type UsersCreateUserErrors = {
+export type CreateUserErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type UsersCreateUserError = UsersCreateUserErrors[keyof UsersCreateUserErrors];
+export type CreateUserError = CreateUserErrors[keyof CreateUserErrors];
 
-export type UsersCreateUserResponses = {
+export type CreateUserResponses = {
     /**
      * Successful Response
      */
-    200: UserPublic;
+    201: UserPublic;
 };
 
-export type UsersCreateUserResponse = UsersCreateUserResponses[keyof UsersCreateUserResponses];
+export type CreateUserResponse = CreateUserResponses[keyof CreateUserResponses];
 
-export type UsersDeleteUserMeData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/users/me';
-};
-
-export type UsersDeleteUserMeResponses = {
-    /**
-     * Successful Response
-     */
-    200: Message;
-};
-
-export type UsersDeleteUserMeResponse = UsersDeleteUserMeResponses[keyof UsersDeleteUserMeResponses];
-
-export type UsersReadUserMeData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/users/me';
-};
-
-export type UsersReadUserMeResponses = {
-    /**
-     * Successful Response
-     */
-    200: UserPublic;
-};
-
-export type UsersReadUserMeResponse = UsersReadUserMeResponses[keyof UsersReadUserMeResponses];
-
-export type UsersUpdateUserMeData = {
-    body: UserUpdateMe;
-    path?: never;
-    query?: never;
-    url: '/api/v1/users/me';
-};
-
-export type UsersUpdateUserMeErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type UsersUpdateUserMeError = UsersUpdateUserMeErrors[keyof UsersUpdateUserMeErrors];
-
-export type UsersUpdateUserMeResponses = {
-    /**
-     * Successful Response
-     */
-    200: UserPublic;
-};
-
-export type UsersUpdateUserMeResponse = UsersUpdateUserMeResponses[keyof UsersUpdateUserMeResponses];
-
-export type UsersUpdatePasswordMeData = {
-    body: UpdatePassword;
-    path?: never;
-    query?: never;
-    url: '/api/v1/users/me/password';
-};
-
-export type UsersUpdatePasswordMeErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type UsersUpdatePasswordMeError = UsersUpdatePasswordMeErrors[keyof UsersUpdatePasswordMeErrors];
-
-export type UsersUpdatePasswordMeResponses = {
-    /**
-     * Successful Response
-     */
-    200: Message;
-};
-
-export type UsersUpdatePasswordMeResponse = UsersUpdatePasswordMeResponses[keyof UsersUpdatePasswordMeResponses];
-
-export type UsersRegisterUserData = {
-    body: UserRegister;
-    path?: never;
-    query?: never;
-    url: '/api/v1/users/signup';
-};
-
-export type UsersRegisterUserErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type UsersRegisterUserError = UsersRegisterUserErrors[keyof UsersRegisterUserErrors];
-
-export type UsersRegisterUserResponses = {
-    /**
-     * Successful Response
-     */
-    200: UserPublic;
-};
-
-export type UsersRegisterUserResponse = UsersRegisterUserResponses[keyof UsersRegisterUserResponses];
-
-export type UsersDeleteUserData = {
+export type DeleteUserData = {
     body?: never;
     path: {
         /**
@@ -628,25 +531,25 @@ export type UsersDeleteUserData = {
     url: '/api/v1/users/{user_id}';
 };
 
-export type UsersDeleteUserErrors = {
+export type DeleteUserErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type UsersDeleteUserError = UsersDeleteUserErrors[keyof UsersDeleteUserErrors];
+export type DeleteUserError = DeleteUserErrors[keyof DeleteUserErrors];
 
-export type UsersDeleteUserResponses = {
+export type DeleteUserResponses = {
     /**
      * Successful Response
      */
     200: Message;
 };
 
-export type UsersDeleteUserResponse = UsersDeleteUserResponses[keyof UsersDeleteUserResponses];
+export type DeleteUserResponse = DeleteUserResponses[keyof DeleteUserResponses];
 
-export type UsersReadUserByIdData = {
+export type GetUserData = {
     body?: never;
     path: {
         /**
@@ -658,25 +561,25 @@ export type UsersReadUserByIdData = {
     url: '/api/v1/users/{user_id}';
 };
 
-export type UsersReadUserByIdErrors = {
+export type GetUserErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type UsersReadUserByIdError = UsersReadUserByIdErrors[keyof UsersReadUserByIdErrors];
+export type GetUserError = GetUserErrors[keyof GetUserErrors];
 
-export type UsersReadUserByIdResponses = {
+export type GetUserResponses = {
     /**
      * Successful Response
      */
     200: UserPublic;
 };
 
-export type UsersReadUserByIdResponse = UsersReadUserByIdResponses[keyof UsersReadUserByIdResponses];
+export type GetUserResponse = GetUserResponses[keyof GetUserResponses];
 
-export type UsersUpdateUserData = {
+export type UpdateUserData = {
     body: UserUpdate;
     path: {
         /**
@@ -688,73 +591,25 @@ export type UsersUpdateUserData = {
     url: '/api/v1/users/{user_id}';
 };
 
-export type UsersUpdateUserErrors = {
+export type UpdateUserErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type UsersUpdateUserError = UsersUpdateUserErrors[keyof UsersUpdateUserErrors];
+export type UpdateUserError = UpdateUserErrors[keyof UpdateUserErrors];
 
-export type UsersUpdateUserResponses = {
+export type UpdateUserResponses = {
     /**
      * Successful Response
      */
     200: UserPublic;
 };
 
-export type UsersUpdateUserResponse = UsersUpdateUserResponses[keyof UsersUpdateUserResponses];
+export type UpdateUserResponse = UpdateUserResponses[keyof UpdateUserResponses];
 
-export type UtilsTestEmailData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Email To
-         */
-        email_to: string;
-    };
-    url: '/api/v1/utils/test-email/';
-};
-
-export type UtilsTestEmailErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type UtilsTestEmailError = UtilsTestEmailErrors[keyof UtilsTestEmailErrors];
-
-export type UtilsTestEmailResponses = {
-    /**
-     * Successful Response
-     */
-    201: Message;
-};
-
-export type UtilsTestEmailResponse = UtilsTestEmailResponses[keyof UtilsTestEmailResponses];
-
-export type UtilsHealthCheckData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/utils/health-check/';
-};
-
-export type UtilsHealthCheckResponses = {
-    /**
-     * Response Utils-Health Check
-     *
-     * Successful Response
-     */
-    200: boolean;
-};
-
-export type UtilsHealthCheckResponse = UtilsHealthCheckResponses[keyof UtilsHealthCheckResponses];
-
-export type ItemsReadItemsData = {
+export type ListItemsData = {
     body?: never;
     path?: never;
     query?: {
@@ -770,135 +625,135 @@ export type ItemsReadItemsData = {
     url: '/api/v1/items/';
 };
 
-export type ItemsReadItemsErrors = {
+export type ListItemsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ItemsReadItemsError = ItemsReadItemsErrors[keyof ItemsReadItemsErrors];
+export type ListItemsError = ListItemsErrors[keyof ListItemsErrors];
 
-export type ItemsReadItemsResponses = {
+export type ListItemsResponses = {
     /**
      * Successful Response
      */
-    200: ItemsPublic;
+    200: PaginatedResponseItemPublic;
 };
 
-export type ItemsReadItemsResponse = ItemsReadItemsResponses[keyof ItemsReadItemsResponses];
+export type ListItemsResponse = ListItemsResponses[keyof ListItemsResponses];
 
-export type ItemsCreateItemData = {
+export type CreateItemData = {
     body: ItemCreate;
     path?: never;
     query?: never;
     url: '/api/v1/items/';
 };
 
-export type ItemsCreateItemErrors = {
+export type CreateItemErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ItemsCreateItemError = ItemsCreateItemErrors[keyof ItemsCreateItemErrors];
+export type CreateItemError = CreateItemErrors[keyof CreateItemErrors];
 
-export type ItemsCreateItemResponses = {
+export type CreateItemResponses = {
     /**
      * Successful Response
      */
-    200: ItemPublic;
+    201: ItemPublic;
 };
 
-export type ItemsCreateItemResponse = ItemsCreateItemResponses[keyof ItemsCreateItemResponses];
+export type CreateItemResponse = CreateItemResponses[keyof CreateItemResponses];
 
-export type ItemsDeleteItemData = {
+export type DeleteItemData = {
     body?: never;
     path: {
         /**
-         * Id
+         * Item Id
          */
-        id: string;
+        item_id: string;
     };
     query?: never;
-    url: '/api/v1/items/{id}';
+    url: '/api/v1/items/{item_id}';
 };
 
-export type ItemsDeleteItemErrors = {
+export type DeleteItemErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ItemsDeleteItemError = ItemsDeleteItemErrors[keyof ItemsDeleteItemErrors];
+export type DeleteItemError = DeleteItemErrors[keyof DeleteItemErrors];
 
-export type ItemsDeleteItemResponses = {
+export type DeleteItemResponses = {
     /**
      * Successful Response
      */
     200: Message;
 };
 
-export type ItemsDeleteItemResponse = ItemsDeleteItemResponses[keyof ItemsDeleteItemResponses];
+export type DeleteItemResponse = DeleteItemResponses[keyof DeleteItemResponses];
 
-export type ItemsReadItemData = {
+export type GetItemData = {
     body?: never;
     path: {
         /**
-         * Id
+         * Item Id
          */
-        id: string;
+        item_id: string;
     };
     query?: never;
-    url: '/api/v1/items/{id}';
+    url: '/api/v1/items/{item_id}';
 };
 
-export type ItemsReadItemErrors = {
+export type GetItemErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ItemsReadItemError = ItemsReadItemErrors[keyof ItemsReadItemErrors];
+export type GetItemError = GetItemErrors[keyof GetItemErrors];
 
-export type ItemsReadItemResponses = {
+export type GetItemResponses = {
     /**
      * Successful Response
      */
     200: ItemPublic;
 };
 
-export type ItemsReadItemResponse = ItemsReadItemResponses[keyof ItemsReadItemResponses];
+export type GetItemResponse = GetItemResponses[keyof GetItemResponses];
 
-export type ItemsUpdateItemData = {
+export type UpdateItemData = {
     body: ItemUpdate;
     path: {
         /**
-         * Id
+         * Item Id
          */
-        id: string;
+        item_id: string;
     };
     query?: never;
-    url: '/api/v1/items/{id}';
+    url: '/api/v1/items/{item_id}';
 };
 
-export type ItemsUpdateItemErrors = {
+export type UpdateItemErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ItemsUpdateItemError = ItemsUpdateItemErrors[keyof ItemsUpdateItemErrors];
+export type UpdateItemError = UpdateItemErrors[keyof UpdateItemErrors];
 
-export type ItemsUpdateItemResponses = {
+export type UpdateItemResponses = {
     /**
      * Successful Response
      */
     200: ItemPublic;
 };
 
-export type ItemsUpdateItemResponse = ItemsUpdateItemResponses[keyof ItemsUpdateItemResponses];
+export type UpdateItemResponse = UpdateItemResponses[keyof UpdateItemResponses];

@@ -1,16 +1,20 @@
 "use client"
-import { FaGithub, FaLinkedinIn } from "react-icons/fa"
-import { FaXTwitter } from "react-icons/fa6"
+
+import { Github, Linkedin, Twitter } from "lucide-react"
 
 const socialLinks = [
   {
-    icon: FaGithub,
+    icon: Github,
     href: "https://github.com/fastapi/fastapi",
     label: "GitHub",
   },
-  { icon: FaXTwitter, href: "https://x.com/fastapi", label: "X" },
   {
-    icon: FaLinkedinIn,
+    icon: Twitter,
+    href: "https://x.com/fastapi",
+    label: "X",
+  },
+  {
+    icon: Linkedin,
     href: "https://linkedin.com/company/fastapi",
     label: "LinkedIn",
   },
@@ -25,6 +29,7 @@ export function Footer() {
         <p className="text-muted-foreground text-sm">
           Full Stack FastAPI & Next.js Template - {currentYear}
         </p>
+
         <div className="flex items-center gap-4">
           {socialLinks.map(({ icon: Icon, href, label }) => (
             <a

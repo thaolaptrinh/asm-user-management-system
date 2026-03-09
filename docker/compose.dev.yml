@@ -1,0 +1,170 @@
+services:
+  db-mysql:
+    ports:
+      - "${DB_FORWARD_PORT:-3306}:3306"
+    networks:
+      - app-network
+
+  db-postgres:
+    ports:
+      - "${DB_FORWARD_PORT:-5432}:5432"
+    networks:
+      - app-network
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    networks:
+      - app-network
+
+  prestart:
+    networks:
+      - app-network
+
+  backend:
+    build:
+      target: development
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+    networks:
+      - app-network
+    depends_on:
+      db-mysql:
+        condition: service_healthy
+        required: false
+      db-postgres:
+        condition: service_healthy
+        required: false
+    develop:
+      watch:
+        - action: sync
+          path: ../backend/app
+          target: /app/app
+          ignore:
+            - __pycache__/
+            - "**/__pycache__/"
+            - "*.pyc"
+        - action: sync
+          path: ../backend/alembic
+          target: /app/alembic
+        - action: sync
+          path: ../backend/tests
+          target: /app/tests
+        - action: rebuild
+          path: ../backend/pyproject.toml
+        - action: rebuild
+          path: ../uv.lock
+
+  frontend:
+    build:
+      target: development
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      HOSTNAME: "0.0.0.0"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    networks:
+      - app-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "nc -z localhost 3000 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    volumes:
+      # Bind mounts so generate-client.sh writes directly to host without docker cp
+      - ../frontend/openapi.json:/app/frontend/openapi.json
+      - ../frontend/openapi-ts.config.ts:/app/frontend/openapi-ts.config.ts
+      - ../frontend/src/client:/app/frontend/src/client
+    develop:
+      watch:
+        - action: sync
+          path: ../frontend/src
+          target: /app/frontend/src
+          ignore:
+            - client/ # bind-mounted above, no need to watch
+        - action: sync
+          path: ../frontend/public
+          target: /app/frontend/public
+        - action: sync
+          path: ../frontend/next.config.ts
+          target: /app/frontend/next.config.ts
+        - action: sync
+          path: ../frontend/tsconfig.json
+          target: /app/frontend/tsconfig.json
+        - action: rebuild
+          path: ../frontend/package.json
+        - action: rebuild
+          path: ../bun.lock
+
+  codegen:
+    image: oven/bun:1.3.10-alpine
+    working_dir: /app
+    profiles: [ "dev" ]
+    environment:
+      OPENAPI_URL: http://backend:8000/api/v1/openapi.json
+    volumes:
+      - ../frontend:/app/frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    command: >
+      sh -c " until wget -q --spider $${OPENAPI_URL} 2>/dev/null; do sleep 1; done && bunx @hey-api/openapi-ts
+        --input $${OPENAPI_URL}
+        --output src/client
+        --client @hey-api/client-next
+      "
+    networks:
+      - app-network
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.58.2-noble
+    profiles: [ "e2e" ]
+    working_dir: /app
+    volumes:
+      - ../frontend:/app
+      - playwright-node-modules:/app/node_modules
+    environment:
+      BASE_URL: http://frontend:3000
+      PLAYWRIGHT_BASE_URL: http://frontend:3000
+      CI: "true"
+      PLAYWRIGHT_SKIP_WEB_SERVER: "1"
+      FIRST_SUPERUSER: ${FIRST_SUPERUSER}
+      FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD}
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    command: >
+      sh -c "
+        npm install &&
+        npx playwright test --reporter=html
+      "
+    ipc: host
+    networks:
+      - app-network
+
+volumes:
+  playwright-node-modules:
+
+
+networks:
+  app-network:
+    name: ${STACK_NAME:-app}-dev-network

@@ -9,7 +9,7 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar"
-import useAuth from "@/hooks/useAuth"
+import { useAuth } from "@/hooks/useAuth"
 import { type Item, Main } from "./Main"
 import { User } from "./User"
 

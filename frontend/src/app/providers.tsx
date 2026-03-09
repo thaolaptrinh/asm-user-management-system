@@ -5,7 +5,6 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import { ThemeProvider } from "next-themes"
 import { useState } from "react"
 import { Toaster } from "sonner"
-import "@/client-config"
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(

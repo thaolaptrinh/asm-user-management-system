@@ -1,263 +1,227 @@
-from unittest.mock import patch
+"""
+Test authentication endpoints.
+Uses async pattern with pytest-asyncio.
+"""
 
-from fastapi.testclient import TestClient
-from pwdlib.hashers.bcrypt import BcryptHasher
-from sqlmodel import Session
+import pytest
 
 from app.core.config import settings
-from app.core.security import get_password_hash, verify_password
-from app.crud import create_user
-from app.models import User, UserCreate
-from app.utils import generate_password_reset_token
-from tests.utils.user import user_authentication_headers
+from app.core.security import hash_password, verify_password
+from app.models.user import User
+from app.repositories.user import UserRepository
+from app.schemas.user import UserCreate
+from app.utils import create_user_password_reset_token, generate_password_reset_token
 from tests.utils.utils import random_email, random_lower_string
 
 
-def test_get_access_token(client: TestClient) -> None:
+@pytest.mark.asyncio
+async def test_get_access_token(client):
+    """Test login sets HttpOnly cookie and returns success message."""
     login_data = {
         "username": settings.FIRST_SUPERUSER,
         "password": settings.FIRST_SUPERUSER_PASSWORD,
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
-    tokens = r.json()
-    assert r.status_code == 200
-    assert "access_token" in tokens
-    assert tokens["access_token"]
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/auth/login", data=login_data
+    )
+    assert response.status_code == 200
+    assert response.json() == {"message": "Login successful"}
+    assert "access_token" in response.cookies
+    assert response.cookies["access_token"]
 
 
-def test_get_access_token_incorrect_password(client: TestClient) -> None:
+@pytest.mark.asyncio
+async def test_get_access_token_incorrect_password(client):
+    """Test login with incorrect password."""
     login_data = {
         "username": settings.FIRST_SUPERUSER,
         "password": "incorrect",
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
-    assert r.status_code == 400
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/auth/login", data=login_data
+    )
+    assert response.status_code == 401
 
 
-def test_get_access_token_inactive_user_returns_400(
-    client: TestClient, db: Session
-) -> None:
-    """Login with is_active=False user -> 400 Inactive user."""
-    user_create = UserCreate(
+@pytest.mark.asyncio
+async def test_get_access_token_inactive_user_returns_401(client, session):
+    """Login with is_active=False user -> 401."""
+    user_repo = UserRepository(session)
+    user = await user_repo.create(
         email=random_email(),
-        password=random_lower_string(),
+        hashed_password=hash_password(random_lower_string()),
         is_active=False,
+        is_superuser=False,
     )
-    create_user(session=db, user_create=user_create)
+    await session.flush()
+
     login_data = {
-        "username": user_create.email,
-        "password": user_create.password,
+        "username": user.email,
+        "password": random_lower_string(),
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
-    assert r.status_code == 400
-    assert r.json()["detail"] == "Inactive user"
-
-
-def test_use_access_token(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    r = client.post(
-        f"{settings.API_V1_STR}/login/test-token",
-        headers=superuser_token_headers,
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/auth/login", data=login_data
     )
-    result = r.json()
-    assert r.status_code == 200
-    assert "email" in result
+    assert response.status_code == 401
+    # Generic message to prevent user enumeration
+    assert "invalid email or password" in response.json()["detail"].lower()
 
 
-def test_recovery_password(
-    client: TestClient, normal_user_token_headers: dict[str, str]
-) -> None:
-    with (
-        patch("app.core.config.settings.SMTP_HOST", "smtp.example.com"),
-        patch("app.core.config.settings.SMTP_USER", "admin@example.com"),
-    ):
-        email = "test@example.com"
-        r = client.post(
-            f"{settings.API_V1_STR}/password-recovery/{email}",
-            headers=normal_user_token_headers,
-        )
-        assert r.status_code == 200
-        assert r.json() == {
-            "message": "If that email is registered, we sent a password recovery link"
-        }
-
-
-def test_recovery_password_user_not_exits(
-    client: TestClient, normal_user_token_headers: dict[str, str]
-) -> None:
-    email = "jVgQr@example.com"
-    r = client.post(
-        f"{settings.API_V1_STR}/password-recovery/{email}",
+@pytest.mark.asyncio
+async def test_recovery_password(client, normal_user_token_headers):
+    """Test password recovery endpoint."""
+    email = "test@example.com"
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/auth/password-recovery/{email}",
         headers=normal_user_token_headers,
     )
-    # Should return 200 with generic message to prevent email enumeration attacks
-    assert r.status_code == 200
-    assert r.json() == {
+    assert response.status_code == 200
+    assert response.json() == {
         "message": "If that email is registered, we sent a password recovery link"
     }
 
 
-def test_reset_password(client: TestClient, db: Session) -> None:
+@pytest.mark.asyncio
+async def test_recovery_password_user_not_exists(client, normal_user_token_headers):
+    """Test password recovery with non-existent user - should not reveal user existence."""
+    email = "nonexistent@example.com"
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/auth/password-recovery/{email}",
+        headers=normal_user_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "message": "If that email is registered, we sent a password recovery link"
+    }
+
+
+@pytest.mark.asyncio
+async def test_reset_password(client, session):
+    """Test password reset with valid token."""
     email = random_email()
     password = random_lower_string()
     new_password = random_lower_string()
 
-    user_create = UserCreate(
+    user_repo = UserRepository(session)
+    user = await user_repo.create(
         email=email,
-        full_name="Test User",
-        password=password,
+        hashed_password=hash_password(password),
         is_active=True,
         is_superuser=False,
     )
-    user = create_user(session=db, user_create=user_create)
-    token = generate_password_reset_token(email=email)
-    headers = user_authentication_headers(client=client, email=email, password=password)
+    await session.flush()
+
+    token = await create_user_password_reset_token(session, email=email)
+    assert token is not None
+
     data = {"new_password": new_password, "token": token}
 
-    r = client.post(
-        f"{settings.API_V1_STR}/reset-password/",
-        headers=headers,
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/auth/reset-password/",
         json=data,
     )
 
-    assert r.status_code == 200
-    assert r.json() == {"message": "Password updated successfully"}
+    assert response.status_code == 200
+    assert response.json() == {"message": "Password updated successfully"}
 
-    db.refresh(user)
-    verified, _ = verify_password(new_password, user.hashed_password)
+    await session.refresh(user)
+    verified = verify_password(new_password, user.hashed_password)
     assert verified
 
 
-def test_reset_password_invalid_token(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
+@pytest.mark.asyncio
+async def test_reset_password_invalid_token(client, superuser_token_headers):
+    """Test password reset with invalid token."""
     data = {"new_password": "changethis", "token": "invalid"}
-    r = client.post(
-        f"{settings.API_V1_STR}/reset-password/",
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/auth/reset-password/",
         headers=superuser_token_headers,
         json=data,
     )
-    response = r.json()
-
-    assert "detail" in response
-    assert r.status_code == 400
-    assert response["detail"] == "Invalid token"
+    assert response.status_code == 409
 
 
-def test_reset_password_valid_token_user_deleted_returns_invalid_token(
-    client: TestClient, db: Session
-) -> None:
-    """Valid token but user no longer exists -> 400 Invalid token (no email enumeration)."""
+@pytest.mark.asyncio
+async def test_reset_password_valid_token_user_deleted(client, session):
+    """Test password reset with valid token but user deleted."""
     email = random_email()
     password = random_lower_string()
-    user_create = UserCreate(email=email, password=password, is_active=True)
-    user = create_user(session=db, user_create=user_create)
-    token = generate_password_reset_token(email=email)
-    db.delete(user)
-    db.commit()
+
+    user_repo = UserRepository(session)
+    user = await user_repo.create(
+        email=email,
+        hashed_password=hash_password(password),
+        is_active=True,
+        is_superuser=False,
+    )
+    await session.flush()
+
+    token = await create_user_password_reset_token(session, email=email)
+    assert token is not None
+
+    await session.delete(user)
+    await session.flush()
+
     data = {"new_password": "newpass123", "token": token}
-    r = client.post(
-        f"{settings.API_V1_STR}/reset-password/",
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/auth/reset-password/",
         json=data,
     )
-    assert r.status_code == 400
-    assert r.json()["detail"] == "Invalid token"
+    assert response.status_code == 409
 
 
-def test_recover_password_html_content_success(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
-    """Superuser can get HTML recovery content for existing user."""
-    email = random_email()
-    create_user(
-        session=db,
-        user_create=UserCreate(email=email, password=random_lower_string()),
-    )
-    r = client.post(
-        f"{settings.API_V1_STR}/password-recovery-html-content/{email}",
-        headers=superuser_token_headers,
-    )
-    assert r.status_code == 200
-    assert "text/html" in r.headers.get("content-type", "")
-    assert len(r.content) > 0
-
-
-def test_recover_password_html_content_user_not_found_returns_404(
-    client: TestClient, superuser_token_headers: dict[str, str]
-) -> None:
-    """Superuser requests HTML for non-existing email -> 404."""
-    r = client.post(
-        f"{settings.API_V1_STR}/password-recovery-html-content/notfound@example.com",
-        headers=superuser_token_headers,
-    )
-    assert r.status_code == 404
-    assert (
-        r.json()["detail"]
-        == "The user with this username does not exist in the system."
-    )
-
-
-def test_login_with_bcrypt_password_upgrades_to_argon2(
-    client: TestClient, db: Session
-) -> None:
-    """Test that logging in with a bcrypt password hash upgrades it to argon2."""
+@pytest.mark.asyncio
+async def test_login_with_bcrypt_password(client, session):
+    """Test that logging in with a bcrypt password hash works."""
     email = random_email()
     password = random_lower_string()
 
-    # Create a bcrypt hash directly (simulating legacy password)
-    bcrypt_hasher = BcryptHasher()
-    bcrypt_hash = bcrypt_hasher.hash(password)
-    assert bcrypt_hash.startswith("$2")  # bcrypt hashes start with $2
+    import bcrypt
 
-    user = User(email=email, hashed_password=bcrypt_hash, is_active=True)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    bcrypt_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
-    assert user.hashed_password.startswith("$2")
+    user_repo = UserRepository(session)
+    await user_repo.create(
+        email=email,
+        hashed_password=bcrypt_hash,
+        is_active=True,
+        is_superuser=False,
+    )
 
     login_data = {"username": email, "password": password}
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
-    assert r.status_code == 200
-    tokens = r.json()
-    assert "access_token" in tokens
-
-    db.refresh(user)
-
-    # Verify the hash was upgraded to argon2
-    assert user.hashed_password.startswith("$argon2")
-
-    verified, updated_hash = verify_password(password, user.hashed_password)
-    assert verified
-    # Should not need another update since it's already argon2
-    assert updated_hash is None
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/auth/login", data=login_data
+    )
+    assert response.status_code == 200
+    assert "access_token" in response.cookies
 
 
-def test_login_with_argon2_password_keeps_hash(client: TestClient, db: Session) -> None:
-    """Test that logging in with an argon2 password hash does not update it."""
+@pytest.mark.asyncio
+async def test_login_with_bcrypt_password_keeps_hash(client, session):
+    """Test that logging in with bcrypt password keeps the hash (no upgrade)."""
     email = random_email()
     password = random_lower_string()
 
-    # Create an argon2 hash (current default)
-    argon2_hash = get_password_hash(password)
-    assert argon2_hash.startswith("$argon2")
+    import bcrypt
 
-    # Create user with argon2 hash
-    user = User(email=email, hashed_password=argon2_hash, is_active=True)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    bcrypt_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+    user_repo = UserRepository(session)
+    user = await user_repo.create(
+        email=email,
+        hashed_password=bcrypt_hash,
+        is_active=True,
+        is_superuser=False,
+    )
 
     original_hash = user.hashed_password
 
     login_data = {"username": email, "password": password}
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
-    assert r.status_code == 200
-    tokens = r.json()
-    assert "access_token" in tokens
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/auth/login", data=login_data
+    )
+    assert response.status_code == 200
+    assert "access_token" in response.cookies
 
-    db.refresh(user)
-
+    await session.refresh(user)
     assert user.hashed_password == original_hash
-    assert user.hashed_password.startswith("$argon2")

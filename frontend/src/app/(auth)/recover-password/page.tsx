@@ -3,13 +3,10 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation } from "@tanstack/react-query"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
-
-import { Login } from "@/client"
+import { auth } from "@/client/sdk.gen"
 import {
   Form,
   FormControl,
@@ -20,7 +17,6 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
-import { isLoggedIn } from "@/lib/auth"
 
 const formSchema = z.object({
   email: z.string().email(),
@@ -29,7 +25,6 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>
 
 export default function RecoverPasswordPage() {
-  const router = useRouter()
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -37,29 +32,32 @@ export default function RecoverPasswordPage() {
     },
   })
 
-  useEffect(() => {
-    if (isLoggedIn()) {
-      router.replace("/")
-    }
-  }, [router])
-
   const mutation = useMutation({
-    mutationFn: (opts: { path: { email: string } }) =>
-      Login.recoverPassword({ ...opts, throwOnError: true }).then(
-        (r) => r.data,
-      ),
+    mutationFn: async (email: string) => {
+      const { data } = await auth.recoverPassword({
+        path: { email },
+      })
+
+      if (!data) {
+        throw new Error("Failed to send recovery email")
+      }
+
+      return data
+    },
+
     onSuccess: () => {
       toast.success("Password recovery email sent successfully")
       form.reset()
     },
+
     onError: (error: Error) => {
       toast.error(error.message)
     },
   })
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = (data: FormData) => {
     if (mutation.isPending) return
-    mutation.mutate({ path: { email: data.email } })
+    mutation.mutate(data.email)
   }
 
   return (
@@ -76,6 +74,7 @@ export default function RecoverPasswordPage() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Email</FormLabel>
+
                 <FormControl>
                   <Input
                     data-testid="email-input"
@@ -84,6 +83,7 @@ export default function RecoverPasswordPage() {
                     {...field}
                   />
                 </FormControl>
+
                 <FormMessage />
               </FormItem>
             )}

@@ -1,8 +1,7 @@
 "use client"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
-
-import { Users } from "@/client"
+import { users } from "@/client/sdk.gen"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -15,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { LoadingButton } from "@/components/ui/loading-button"
-import useAuth from "@/hooks/useAuth"
+import { useAuth } from "@/hooks/useAuth"
 import useCustomToast from "@/hooks/useCustomToast"
 import { handleError } from "@/lib/utils"
 
@@ -23,11 +22,13 @@ const DeleteConfirmation = () => {
   const queryClient = useQueryClient()
   const { showSuccessToast, showErrorToast } = useCustomToast()
   const { handleSubmit } = useForm()
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
 
   const mutation = useMutation({
     mutationFn: () =>
-      Users.deleteUserMe({ throwOnError: true }).then((r) => r.data),
+      users
+        .deleteUser({ path: { user_id: user!.id }, throwOnError: true })
+        .then((r) => r.data),
     onSuccess: () => {
       showSuccessToast("Your account has been successfully deleted")
       logout()

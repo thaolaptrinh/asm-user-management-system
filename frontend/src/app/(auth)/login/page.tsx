@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import type { BodyLoginLoginAccessToken as AccessToken } from "@/client"
+
 import {
   Form,
   FormControl,
@@ -15,24 +15,26 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
+
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
 import { PasswordInput } from "@/components/ui/password-input"
-import { isLoggedIn, useAuth } from "@/lib/auth"
+
+import { useLogin } from "@/hooks/useAuth"
 
 const formSchema = z.object({
   username: z.string().email(),
   password: z
     .string()
-    .min(1, { message: "Password is required" })
     .min(8, { message: "Password must be at least 8 characters" }),
-}) satisfies z.ZodType<AccessToken>
+})
 
 type FormData = z.infer<typeof formSchema>
 
 export default function LoginPage() {
+  const loginMutation = useLogin()
   const router = useRouter()
-  const { loginMutation } = useAuth()
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     mode: "onBlur",
@@ -43,17 +45,18 @@ export default function LoginPage() {
     },
   })
 
-  // Redirect when already logged in (localStorage). Middleware only sees cookie;
-  // this handles legacy session or cookie-less case. Intentional client-side redirect.
+  // redirect after successful login — wait for useMe query to refetch
   useEffect(() => {
-    if (isLoggedIn()) {
-      router.replace("/")
+    if (loginMutation.isSuccess) {
+      router.push("/")
     }
-  }, [router])
+  }, [loginMutation.isSuccess, router])
 
-  const onSubmit = (data: FormData) => {
-    if (loginMutation.isPending) return
-    loginMutation.mutate({ body: data })
+  const onSubmit = async (data: FormData) => {
+    await loginMutation.mutateAsync({
+      email: data.username,
+      password: data.password,
+    })
   }
 
   return (
@@ -70,6 +73,7 @@ export default function LoginPage() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Email</FormLabel>
+
                 <FormControl>
                   <Input
                     data-testid="email-input"
@@ -78,11 +82,11 @@ export default function LoginPage() {
                     {...field}
                   />
                 </FormControl>
+
                 <FormMessage className="text-xs" />
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="password"
@@ -90,6 +94,7 @@ export default function LoginPage() {
               <FormItem>
                 <div className="flex items-center">
                   <FormLabel>Password</FormLabel>
+
                   <Link
                     href="/recover-password"
                     className="ml-auto text-sm underline-offset-4 hover:underline"
@@ -97,6 +102,7 @@ export default function LoginPage() {
                     Forgot your password?
                   </Link>
                 </div>
+
                 <FormControl>
                   <PasswordInput
                     data-testid="password-input"
@@ -104,11 +110,18 @@ export default function LoginPage() {
                     {...field}
                   />
                 </FormControl>
+
                 <FormMessage className="text-xs" />
               </FormItem>
             )}
           />
-
+          {loginMutation.isError && (
+            <p className="text-sm text-destructive text-center">
+              {loginMutation.error instanceof Error
+                ? loginMutation.error.message
+                : "Invalid email or password"}
+            </p>
+          )}
           <LoadingButton type="submit" loading={loginMutation.isPending}>
             Log In
           </LoadingButton>

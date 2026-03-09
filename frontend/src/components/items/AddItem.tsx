@@ -5,7 +5,7 @@ import { Plus } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { type ItemCreate, Items } from "@/client"
+import { type ItemCreate, items } from "@/client"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -54,7 +54,7 @@ const AddItem = () => {
 
   const mutation = useMutation({
     mutationFn: (body: ItemCreate) =>
-      Items.createItem({ body, throwOnError: true }).then((r) => r.data),
+      items.createItem({ body, throwOnError: true }).then((r) => r.data),
     onSuccess: () => {
       showSuccessToast("Item created successfully")
       form.reset()
