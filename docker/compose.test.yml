@@ -26,14 +26,15 @@ services:
   backend:
     build:
       target: development
-    # Bind-mount source and tests over the baked-in COPY layers.
-    # Image only needs rebuilding when pyproject.toml / uv.lock changes
-    # (i.e. new dependencies), not on every source edit.
     volumes:
-      - ../backend/app:/app/app
-      - ../backend/tests:/app/tests
-      # Write htmlcov to host so CI can upload it as an artifact.
-      - ../backend/htmlcov:/app/htmlcov
+      # Dependency files - sync changes between host ↔ container
+      - ../backend/pyproject.toml:/app/pyproject.toml:rw
+      - ../uv.lock:/app/uv.lock:rw
+      # Source code - read-only (test only imports, never writes)
+      - ../backend/app:/app/app:ro
+      - ../backend/tests:/app/tests:ro
+      # Coverage report output - write to host
+      - ../backend/htmlcov:/app/htmlcov:rw
     environment:
       APP_ENV: local
       APP_DEBUG: "true"
