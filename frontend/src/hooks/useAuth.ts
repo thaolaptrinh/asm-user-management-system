@@ -19,9 +19,8 @@ export function useLogin() {
         },
         throwOnError: true,
       })
-      // Cookie is set automatically. Refetch user to update auth state.
       await queryClient.invalidateQueries({ queryKey: ["me"] })
-      const data = await queryClient.fetchQuery({
+      await queryClient.fetchQuery({
         queryKey: ["me"],
         queryFn: async () => {
           const { data } = await users.getMe()
@@ -46,12 +45,11 @@ export function useLogout() {
     },
     onSuccess: () => {
       queryClient.clear()
-      window.location.href = "/login"
+      window.location.replace("/login")
     },
     onError: () => {
-      // Clear local state even if the logout request fails
       queryClient.clear()
-      window.location.href = "/login"
+      window.location.replace("/login")
     },
   })
 }
