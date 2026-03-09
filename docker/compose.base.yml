@@ -15,7 +15,7 @@ services:
       - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
       - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
     healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      test: [ "CMD-SHELL", "mysql -u${DB_USERNAME} -p${DB_PASSWORD} -e 'SELECT 1' ${DB_DATABASE}" ]
       interval: 10s
       timeout: 5s
       retries: 10
