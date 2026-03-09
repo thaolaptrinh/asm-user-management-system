@@ -1,7 +1,7 @@
 services:
   db-mysql:
     image: mysql:8.0
-    profiles: ["mysql"]
+    profiles: [ "mysql" ]
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${DB_DATABASE}
@@ -9,15 +9,13 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
     command: >
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-      --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO
+      --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO
     volumes:
       - db-mysql-data:/var/lib/mysql
       - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
       - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -27,7 +25,7 @@ services:
 
   db-postgres:
     image: postgres:16-alpine
-    profiles: ["postgres"]
+    profiles: [ "postgres" ]
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_DATABASE}
@@ -38,7 +36,7 @@ services:
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
       - ./docker/postgres/conf.d:/etc/postgresql/conf.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -65,11 +63,11 @@ services:
     depends_on:
       db-mysql:
         condition: service_healthy
-        required: false
+        required: true
       db-postgres:
         condition: service_healthy
         required: false
-    command: ["alembic", "upgrade", "head"]
+    command: [ "alembic", "upgrade", "head" ]
     restart: "no"
 
   backend:
@@ -111,8 +109,7 @@ services:
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-noreply@example.com}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-App}
     healthcheck:
-      test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -129,13 +126,11 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider",
-             "http://localhost:3000"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-
 
 volumes:
   db-mysql-data:

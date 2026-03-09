@@ -3,7 +3,7 @@ services:
     environment:
       MYSQL_DATABASE: ${DB_DATABASE}_test
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -13,7 +13,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_DATABASE}_test
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}_test"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}_test" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -21,7 +21,7 @@ services:
 
   prestart:
     command: echo "skipped for tests"
-    profiles: ["skip"]
+    profiles: [ "skip" ]
 
   backend:
     build:
@@ -50,10 +50,7 @@ services:
         condition: service_completed_successfully
         required: false
     command: >
-      pytest tests/ -v
-      --cov=app
-      --cov-report=term-missing
-      --cov-report=html
+      pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=html
 
   frontend:
     build:
@@ -66,7 +63,7 @@ services:
 
   playwright:
     image: mcr.microsoft.com/playwright:v1.58.2-noble
-    profiles: ["e2e"]
+    profiles: [ "e2e" ]
     working_dir: /app
     volumes:
       - ../frontend:/app
@@ -122,6 +119,7 @@ volumes:
       device: tmpfs
       o: size=512m,noexec,nosuid
   playwright-node-modules:
+
 
 networks:
   app-network:

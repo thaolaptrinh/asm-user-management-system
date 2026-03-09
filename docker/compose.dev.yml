@@ -1,13 +1,13 @@
 services:
   db-mysql:
     ports:
-      - "${DB_PORT:-3306}:3306"
+      - "${DB_FORWARD_PORT:-3306}:3306"
     networks:
       - app-network
 
   db-postgres:
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_FORWARD_PORT:-5432}:5432"
     networks:
       - app-network
 
@@ -82,7 +82,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 3000 || exit 1"]
+      test: [ "CMD-SHELL", "nc -z localhost 3000 || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -98,7 +98,7 @@ services:
           path: ../frontend/src
           target: /app/frontend/src
           ignore:
-            - client/  # bind-mounted above, no need to watch
+            - client/ # bind-mounted above, no need to watch
         - action: sync
           path: ../frontend/public
           target: /app/frontend/public
@@ -120,7 +120,7 @@ services:
     environment:
       OPENAPI_URL: http://backend:8000/api/v1/openapi.json
     volumes:
-      - ../frontend:/app/frontend  
+      - ../frontend:/app/frontend
     depends_on:
       backend:
         condition: service_healthy

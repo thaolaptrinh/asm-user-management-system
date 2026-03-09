@@ -5,13 +5,13 @@ TEST_PROJECT := test
 DC        := docker compose --env-file .env
 DC_BASE   := $(DC) -f docker/compose.base.yml
 
-DC_DEV    := $(DC_BASE) -f docker/compose.dev.yml
+DB_CONNECTION ?= mysql
+DB_SERVICE    := db-$(DB_CONNECTION)
+
+DC_DEV    := $(DC_BASE) -f docker/compose.dev.yml --profile $(DB_CONNECTION)
 DC_TEST   := $(DC_BASE) -f docker/compose.test.yml -p $(TEST_PROJECT)
 DC_STAGE  := $(DC_BASE) -f docker/compose.staging.yml
 DC_PROD   := $(DC_BASE) -f docker/compose.prod.yml
-
-DB_CONNECTION ?= mysql
-DB_SERVICE    := db-$(DB_CONNECTION)
 
 .SHELL := /bin/bash
 .ONESHELL:
@@ -35,12 +35,12 @@ secrets: ## Generate secure secret values for .env
 # ============== DEVELOPMENT ==============
 .PHONY: dev
 dev: ## Start all services with hot-reload via docker compose watch (blocks terminal)
-	$(DC_DEV) --profile $(DB_CONNECTION) watch
+	$(DC_DEV) watch
 
 .PHONY: dev-build
 dev-build: ## Rebuild images then start with hot-reload (NO_CACHE=1 for no-cache)
-	$(DC_DEV) --profile $(DB_CONNECTION) build $(if $(NO_CACHE),--no-cache,)
-	$(DC_DEV) --profile $(DB_CONNECTION) watch
+	$(DC_DEV) build $(if $(NO_CACHE),--no-cache,)
+	$(DC_DEV) watch
 
 .PHONY: restart
 restart: ## Restart all services
@@ -56,7 +56,7 @@ down: ## Stop and remove containers
 
 .PHONY: clean
 clean: ## Stop and remove containers + volumes (DESTRUCTIVE)
-	$(DC_DEV) down -v
+	$(DC_DEV) down -v --remove-orphans
 
 .PHONY: ps
 ps: ## Show running containers
@@ -93,7 +93,7 @@ shell-db: ## Open database shell (MySQL or PostgreSQL based on DB_CONNECTION)
 	@if [ "$(DB_CONNECTION)" = "postgres" ]; then \
 		$(DC_DEV) exec $(DB_SERVICE) psql -U $${DB_USERNAME} -d $${DB_DATABASE}; \
 	else \
-		$(DC_DEV) exec -e MYSQL_PWD=$${DB_PASSWORD} $(DB_SERVICE) mysql -u$${DB_USERNAME} $${DB_DATABASE}; \
+		$(DC_DEV) exec -e MYSQL_PWD="$${DB_PASSWORD}" $(DB_SERVICE) mysql -u$${DB_USERNAME} $${DB_DATABASE}; \
 	fi
 
 # ============== DATABASE ==============
@@ -130,14 +130,13 @@ migrate-make: ## Create new migration: make migrate-make m="create_users_table"
 
 .PHONY: seed
 seed: ## Seed the database
-	make
+	$(DC_DEV) exec backend python -m app.db.seed
 
 .PHONY: db-reset
 db-reset: ## Reset database: drop, recreate, migrate, seed
 	$(DC_DEV) stop $(DB_SERVICE)
 	$(DC_DEV) rm -fv $(DB_SERVICE)
-	$(DC_DEV) --profile $(DB_CONNECTION) up -d $(DB_SERVICE)
-	@echo "Waiting for DB..." && sleep 10
+	$(DC_DEV) up -d --wait $(DB_SERVICE)
 	$(MAKE) migrate-fresh seed
 
 # ============== CODE GENERATION ==============
@@ -177,7 +176,7 @@ test-fe: ## Frontend tests with coverage
 
 .PHONY: test-e2e
 test-e2e: ## E2E tests - local dev (fast, base image with runtime install)
-	$(DC_DEV) --profile $(DB_CONNECTION) --profile e2e up -d --wait
+	$(DC_DEV) --profile e2e up -d --wait
 	$(DC_DEV) --profile e2e run --rm playwright
 
 .PHONY: test-e2e-ci
@@ -219,7 +218,7 @@ check: lint typecheck ## Run all checks
 # ============== BUILD ==============
 .PHONY: build
 build: ## Build all images
-	$(DC_BASE) build
+	$(DC_BASE) --profile $(DB_CONNECTION) build
 
 .PHONY: build-prod
 build-prod: ## Build production images
@@ -227,7 +226,7 @@ build-prod: ## Build production images
 
 .PHONY: build-no-cache
 build-no-cache: ## Build with no cache
-	$(DC_BASE) build --no-cache
+	$(DC_BASE) --profile $(DB_CONNECTION) build --no-cache
 
 # ============== UTILITIES ==============
 .PHONY: prune
