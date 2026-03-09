@@ -130,17 +130,20 @@ tạo khi user gọi POST /auth/totp/enroll (Step 1).
 ```
 User -> Nhập email/password ->
 +- Sai -> Báo lỗi
-+- Đúng -> Check TOTP status ->
-            +- Đã enable -> Verify TOTP -> Login OK
-            +- Chưa enable -> Enroll TOTP (3-step) -> Login OK
++- Đúng -> temp_token (2 phút) -> Check TOTP status (dùng temp_token) ->
+            +- Đã enable -> Verify TOTP (Flow A: temp_token + totp_code) -> access_token -> Login OK
+            +- Chưa enable -> Enroll TOTP (3-step) -> Verify TOTP (Flow A: temp_token + totp_code mới) -> access_token -> Login OK
 ```
 
 ### 5.3. Enroll TOTP (3-step chuẩn)
 
 ```
-Step 1: Enroll -> Generate secret + QR code
-Step 2: Challenge -> Tạo challenge (in-memory, timeout 60s)
-Step 3: Verify -> Verify code -> TOTP enabled
+Step 1: POST /auth/totp/enroll (temp_token) -> Generate secret + QR code
+Step 2: POST /auth/totp/challenge (temp_token) -> challenge_id (in-memory, timeout 60s)
+Step 3: POST /auth/totp/verify Flow B (challenge_id + totp_code) -> TOTP enabled
+
+Sau Step 3: User dùng lại temp_token còn hiệu lực để gọi tiếp:
+Step 4: POST /auth/totp/verify Flow A (temp_token + totp_code mới) -> access_token
 ```
 
 ### 5.4. Truy Cập User Management

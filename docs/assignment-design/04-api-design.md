@@ -34,23 +34,25 @@ Base URL: /api/v1
 
 \`\`\`
 1. Register -> POST /auth/register
-2. Login -> POST /auth/login -> temp_token
-3. Check TOTP status -> GET /auth/totp/status
-   +- Đã enable -> Challenge + Verify -> access_token
-   +- Chưa enable -> Enroll -> Challenge -> Verify -> access_token
+2. Login -> POST /auth/login -> temp_token (2 phút, limited scope)
+3. Check TOTP status -> GET /auth/totp/status (dùng temp_token)
+   +- Đã enable  -> Flow A: POST /auth/totp/verify (temp_token + totp_code) -> access_token
+   +- Chưa enable -> Enroll TOTP (3-step) -> Flow A: POST /auth/totp/verify (temp_token + totp_code mới) -> access_token
 \`\`\`
 
 ### Enroll TOTP (3-step chuẩn)
 
 \`\`\`
-Step 1: POST /auth/totp/enroll
+Step 1: POST /auth/totp/enroll (temp_token)
         -> Generate secret + QR code
 
-Step 2: POST /auth/totp/challenge
-        -> Tạo challenge (in-memory, timeout 60s)
+Step 2: POST /auth/totp/challenge (temp_token)
+        -> challenge_id (in-memory, timeout 60s)
 
-Step 3: POST /auth/totp/verify
-        -> Verify code với challenge -> TOTP enabled
+Step 3: POST /auth/totp/verify Flow B (challenge_id + totp_code)
+        -> TOTP enabled (is_verified = true trong DB)
+
+Sau enroll: temp_token vẫn còn hiệu lực -> gọi tiếp Flow A để lấy access_token
 \`\`\`
 
 ---
@@ -109,6 +111,8 @@ Step 3: POST /auth/totp/verify
 
 **Error (401):** Sai email/password
 
+**Note:** `temp_token` là limited JWT, được dùng như Bearer (`Authorization: Bearer <temp_token>`) cho các TOTP endpoints: `GET /auth/totp/status`, `POST /auth/totp/enroll`, `POST /auth/totp/challenge`, `POST /auth/totp/verify` (Flow A). Server phân biệt temp_token vs access_token qua claim `type` (`"temp"` vs `"access"`). Temp_token bị từ chối ở tất cả endpoints khác (403).
+
 ---
 
 #### POST /auth/totp/verify
@@ -146,19 +150,21 @@ Endpoint này dùng cho **hai luồng**. Phân biệt bằng body: có `temp_tok
 
 **Note:** Access token 15 phút; Phase 1 không có refresh token. Khi token hết hạn, user phải login lại.
 
-**Error (401):** TOTP không hợp lệ hoặc temp_token hết hạn
+**Security:** Server check `last_used_at` trong `totp_secrets`. Nếu `last_used_at >= current_window_start` (cùng 30s window) → reject 401 (replay attack). Update `last_used_at = NOW()` sau verify thành công.
+
+**Error (401):** TOTP không hợp lệ, temp_token hết hạn, hoặc code đã dùng trong window hiện tại
 
 ---
 
 **B. Verify TOTP khi enroll (Step 3)**
 
-**Auth:** Yes (Bearer) hoặc dùng challenge_id từ Step 2
+**Auth:** No (challenge_id tự xác định user, không cần Bearer)
 
 **Request:**
 \`\`\`json
 {
   "challenge_id": "uuid",
-  "code": "123456"
+  "totp_code": "123456"
 }
 \`\`\`
 
@@ -170,7 +176,11 @@ Endpoint này dùng cho **hai luồng**. Phân biệt bằng body: có `temp_tok
 }
 \`\`\`
 
-**Error (401):** Mã TOTP không hợp lệ hoặc challenge expired
+**Note (post-enrollment):** Sau khi enroll thành công, `temp_token` vẫn còn hiệu lực (2 phút). User cần gọi tiếp **Flow A** (`POST /auth/totp/verify` với `temp_token + totp_code` mới) để nhận `access_token` và hoàn tất đăng nhập.
+
+**Security:** Áp dụng replay attack prevention tương tự Flow A — check và update `last_used_at`.
+
+**Error (401):** Mã TOTP không hợp lệ, challenge expired (>60s), hoặc code đã dùng trong window hiện tại
 
 ---
 
@@ -186,6 +196,8 @@ Endpoint này dùng cho **hai luồng**. Phân biệt bằng body: có `temp_tok
 }
 \`\`\`
 
+**Note:** Phase 1 dùng stateless JWT nên server không invalidate token. Logout là client-side only (client xóa token khỏi storage). Token vẫn technically valid cho đến khi hết hạn 15 phút.
+
 ---
 
 ### TOTP
@@ -193,7 +205,7 @@ Endpoint này dùng cho **hai luồng**. Phân biệt bằng body: có `temp_tok
 #### GET /auth/totp/status
 Kiểm tra user đã enable TOTP chưa.
 
-**Auth:** Yes
+**Auth:** Yes (Bearer access_token hoặc temp_token)
 
 **Response (200):**
 \`\`\`json
@@ -208,7 +220,7 @@ Kiểm tra user đã enable TOTP chưa.
 #### POST /auth/totp/enroll
 Enroll TOTP - Step 1: Generate secret + QR code.
 
-**Auth:** Yes
+**Auth:** Yes (Bearer access_token hoặc temp_token)
 
 **Response (200):**
 \`\`\`json
@@ -219,12 +231,19 @@ Enroll TOTP - Step 1: Generate secret + QR code.
 }
 \`\`\`
 
+**Behavior:**
+- Chưa có row trong `totp_secrets` → tạo mới
+- Đã có row nhưng `is_verified = false` → overwrite (generate secret mới, reset `is_verified = false`)
+- Đã có row và `is_verified = true` → `409 Conflict` (TOTP đã active; Phase 1 không hỗ trợ disable/re-enroll)
+
+**Error (409):** TOTP đã được kích hoạt
+
 ---
 
 #### POST /auth/totp/challenge
 Enroll TOTP - Step 2: Tạo challenge.
 
-**Auth:** Yes
+**Auth:** Yes (Bearer access_token hoặc temp_token)
 
 **Response (200):**
 \`\`\`json
@@ -234,11 +253,19 @@ Enroll TOTP - Step 2: Tạo challenge.
 }
 \`\`\`
 
-**Note:** Challenge lưu in-memory, có timeout 60 giây.
+**Note:** Challenge lưu in-memory với cấu trúc:
+\`\`\`json
+{
+  "challenge_id": "uuid",
+  "user_id": "char(36)",
+  "expires_at": "timestamp"
+}
+\`\`\`
+Timeout 60 giây. Không persist vào database. Mất khi server restart. Dùng `challenge_id` này ở Step 3 (Flow B).
 
 ---
 
-_(Xem mục POST /auth/totp/verify ở trên — luồng B dùng challenge_id + code.)_
+_(Xem mục POST /auth/totp/verify ở trên — luồng B dùng challenge_id + totp_code.)_
 
 ---
 
@@ -343,15 +370,33 @@ Phase 1 sử dụng JWT access token (không có refresh token):
 
 ### Token Structure
 
+**Access Token:**
 \`\`\`json
 {
   "sub": "user_id",
+  "type": "access",
   "exp": 1741265400,
   "iat": 1741261800,
   "iss": "https://api.example.com",
   "aud": "https://example.com"
 }
 \`\`\`
+
+**Temp Token** (issued sau `POST /auth/login`, limited scope):
+\`\`\`json
+{
+  "sub": "user_id",
+  "type": "temp",
+  "exp": 1741261920,
+  "iat": 1741261800,
+  "iss": "https://api.example.com",
+  "aud": "https://example.com"
+}
+\`\`\`
+
+Middleware phân biệt token type qua claim `type`:
+- `"access"` → full access theo role
+- `"temp"` → chỉ cho phép TOTP endpoints; trả `403` ở tất cả endpoints khác
 
 ### Usage
 
