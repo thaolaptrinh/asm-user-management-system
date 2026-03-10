@@ -30,3 +30,8 @@ class UnauthorizedError(AppException):
             detail=detail,
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+class ValidationError(AppException):
+    def __init__(self, detail: str) -> None:
+        super().__init__(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)

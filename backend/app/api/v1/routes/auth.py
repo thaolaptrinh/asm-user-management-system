@@ -5,11 +5,13 @@ from fastapi.security import OAuth2PasswordRequestForm
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from app.api.v1.cookie import clear_auth_cookie
 from app.api.v1.deps import AuthServiceDep, SessionDep, UserServiceDep
 from app.core.config import settings
 from app.core.exceptions import ConflictError
-from app.core.security import hash_password
+from app.core.security import create_temp_token, hash_password
 from app.schemas.common import Message
+from app.schemas.totp import LoginTempTokenResponse
 from app.schemas.user import UserCreate, UserRegister, UserResetPasswordToken
 from app.utils import (
     create_user_password_reset_token,
@@ -21,68 +23,49 @@ from app.utils import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 limiter = Limiter(key_func=get_remote_address)
 
-_COOKIE_NAME = "access_token"
 
-
-def _set_auth_cookie(response: Response, token: str) -> None:
-    response.set_cookie(
-        key=_COOKIE_NAME,
-        value=token,
-        httponly=True,
-        secure=settings.is_production,
-        samesite="lax",
-        max_age=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        path="/",
-    )
-
-
-def _clear_auth_cookie(response: Response) -> None:
-    response.delete_cookie(key=_COOKIE_NAME, path="/")
-
-
-@router.post("/login", response_model=Message, operation_id="login")
+@router.post("/login", response_model=LoginTempTokenResponse, operation_id="login")
 @limiter.limit("5/minute")
 async def login(
     request: Request,
-    response: Response,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     auth_service: AuthServiceDep,
-) -> Message:
+) -> LoginTempTokenResponse:
+    """Step 1 of 2FA: verify email/password, return short-lived temp_token."""
     user = await auth_service.authenticate(
         email=form_data.username,
         password=form_data.password,
     )
-    token = auth_service.issue_token(user)
-    _set_auth_cookie(response, token)
-    return Message(message="Login successful")
+    temp_token = create_temp_token(str(user.id))
+    return LoginTempTokenResponse(temp_token=temp_token)
 
 
 @router.post("/logout", response_model=Message, operation_id="logout")
 async def logout(response: Response) -> Message:
-    _clear_auth_cookie(response)
-    return Message(message="Logout successful")
+    clear_auth_cookie(response)
+    return Message(message="Đăng xuất thành công")
 
 
 @router.post(
-    "/register", response_model=Message, status_code=201, operation_id="register"
+    "/register",
+    response_model=Message,
+    status_code=201,
+    operation_id="register",
+    responses={409: {"description": "Email already registered", "model": Message}},
 )
 async def register(
-    response: Response,
     user_data: UserRegister,
-    auth_service: AuthServiceDep,
     user_service: UserServiceDep,
 ) -> Message:
-    """Register a new user, set auth cookie, and return success message."""
-    user = await user_service.create(
+    """Register a new user. Client must then go through the TOTP enroll flow."""
+    await user_service.create(
         UserCreate(
             email=user_data.email,
             password=user_data.password,
             full_name=user_data.full_name,
         )
     )
-    token = auth_service.issue_token(user)
-    _set_auth_cookie(response, token)
-    return Message(message="Registration successful")
+    return Message(message="Đăng ký thành công. Vui lòng đăng nhập và kích hoạt TOTP.")
 
 
 @router.post(

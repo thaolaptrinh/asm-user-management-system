@@ -1,13 +1,27 @@
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
-from app.api.v1.deps import CurrentUser, SuperuserDep, UserRepoDep, UserServiceDep
-from app.core.exceptions import ForbiddenError, NotFoundError
+from app.api.v1.deps import (
+    AuditLogRepositoryDep,
+    CurrentUser,
+    UserRepoDep,
+    UserServiceDep,
+)
+from app.core.exceptions import NotFoundError
 from app.schemas.common import Message, PaginatedResponse
-from app.schemas.user import UserCreate, UserPublic, UserUpdate, UserUpdateMe
+from app.schemas.user import (
+    ChangePassword,
+    UserCreate,
+    UserPublic,
+    UserUpdate,
+    UserUpdateMe,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/me", response_model=UserPublic, operation_id="getMe")
@@ -29,7 +43,7 @@ async def update_me(
 
 @router.get("/", response_model=PaginatedResponse[UserPublic], operation_id="listUsers")
 async def list_users(
-    _: SuperuserDep,
+    _: CurrentUser,
     user_repo: UserRepoDep,
     skip: int = 0,
     limit: int = 100,
@@ -44,10 +58,16 @@ async def list_users(
     )
 
 
-@router.post("/", response_model=UserPublic, status_code=201, operation_id="createUser")
+@router.post(
+    "/",
+    response_model=UserPublic,
+    status_code=201,
+    operation_id="createUser",
+    responses={409: {"description": "Email already registered", "model": Message}},
+)
 async def create_user(
     data: UserCreate,
-    _: SuperuserDep,
+    _: CurrentUser,
     user_service: UserServiceDep,
 ) -> UserPublic:
     user = await user_service.create(data)
@@ -57,7 +77,7 @@ async def create_user(
 @router.get("/{user_id}", response_model=UserPublic, operation_id="getUser")
 async def get_user(
     user_id: uuid.UUID,
-    _: SuperuserDep,
+    _: CurrentUser,
     user_service: UserServiceDep,
 ) -> UserPublic:
     user = await user_service.get_or_404(user_id)
@@ -68,7 +88,7 @@ async def get_user(
 async def update_user(
     user_id: uuid.UUID,
     data: UserUpdate,
-    _: SuperuserDep,
+    _: CurrentUser,
     user_service: UserServiceDep,
 ) -> UserPublic:
     user = await user_service.get_or_404(user_id)
@@ -79,14 +99,34 @@ async def update_user(
 @router.delete("/{user_id}", response_model=Message, operation_id="deleteUser")
 async def delete_user(
     user_id: uuid.UUID,
-    current_user: CurrentUser,
-    _: SuperuserDep,
+    _: CurrentUser,
     user_repo: UserRepoDep,
 ) -> Message:
-    if str(user_id) == str(current_user.id):
-        raise ForbiddenError("Cannot delete your own account")
     user = await user_repo.get_by_id(user_id)
     if user is None:
         raise NotFoundError("User", user_id)
     await user_repo.delete(user)
     return Message(message="User deleted")
+
+
+@router.put(
+    "/me/password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="changePassword",
+)
+@limiter.limit("3/15minutes")
+async def change_password(
+    request: Request,
+    data: ChangePassword,
+    current_user: CurrentUser,
+    user_service: UserServiceDep,
+    audit_repo: AuditLogRepositoryDep,
+) -> None:
+    """Change user password with security best practices."""
+    await user_service.change_password(
+        current_user,
+        data,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        audit_repo=audit_repo,
+    )

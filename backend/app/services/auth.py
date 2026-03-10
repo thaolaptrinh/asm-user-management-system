@@ -17,4 +17,7 @@ class AuthService:
         return user
 
     def issue_token(self, user: User) -> str:
-        return create_access_token(subject=str(user.id))
+        return create_access_token(
+            subject=str(user.id),
+            password_version=user.password_version
+        )
