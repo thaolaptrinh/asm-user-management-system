@@ -60,6 +60,30 @@ export const Body_loginSchema = {
     title: 'Body_login'
 } as const;
 
+export const ChangePasswordSchema = {
+    properties: {
+        current_password: {
+            type: 'string',
+            maxLength: 128,
+            minLength: 8,
+            title: 'Current Password'
+        },
+        new_password: {
+            type: 'string',
+            maxLength: 128,
+            minLength: 8,
+            title: 'New Password'
+        }
+    },
+    type: 'object',
+    required: [
+        'current_password',
+        'new_password'
+    ],
+    title: 'ChangePassword',
+    description: 'Schema for password change.'
+} as const;
+
 export const HTTPValidationErrorSchema = {
     properties: {
         detail: {
@@ -74,104 +98,25 @@ export const HTTPValidationErrorSchema = {
     title: 'HTTPValidationError'
 } as const;
 
-export const ItemCreateSchema = {
+export const LoginTempTokenResponseSchema = {
     properties: {
-        title: {
+        temp_token: {
             type: 'string',
-            maxLength: 255,
-            minLength: 1,
-            title: 'Title'
+            title: 'Temp Token',
+            description: 'Short-lived token for TOTP verification'
         },
-        description: {
-            anyOf: [
-                {
-                    type: 'string',
-                    maxLength: 1000
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Description'
+        message: {
+            type: 'string',
+            title: 'Message',
+            default: 'Vui lòng nhập mã TOTP'
         }
     },
     type: 'object',
     required: [
-        'title'
+        'temp_token'
     ],
-    title: 'ItemCreate'
-} as const;
-
-export const ItemPublicSchema = {
-    properties: {
-        title: {
-            type: 'string',
-            maxLength: 255,
-            minLength: 1,
-            title: 'Title'
-        },
-        description: {
-            anyOf: [
-                {
-                    type: 'string',
-                    maxLength: 1000
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Description'
-        },
-        id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Id'
-        },
-        owner_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Owner Id'
-        }
-    },
-    type: 'object',
-    required: [
-        'title',
-        'id',
-        'owner_id'
-    ],
-    title: 'ItemPublic'
-} as const;
-
-export const ItemUpdateSchema = {
-    properties: {
-        title: {
-            anyOf: [
-                {
-                    type: 'string',
-                    maxLength: 255,
-                    minLength: 1
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Title'
-        },
-        description: {
-            anyOf: [
-                {
-                    type: 'string',
-                    maxLength: 1000
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Description'
-        }
-    },
-    type: 'object',
-    title: 'ItemUpdate'
+    title: 'LoginTempTokenResponse',
+    description: 'Response for POST /auth/login — step 1 of 2FA flow.'
 } as const;
 
 export const MessageSchema = {
@@ -186,38 +131,6 @@ export const MessageSchema = {
         'message'
     ],
     title: 'Message'
-} as const;
-
-export const PaginatedResponse_ItemPublic_Schema = {
-    properties: {
-        data: {
-            items: {
-                $ref: '#/components/schemas/ItemPublic'
-            },
-            type: 'array',
-            title: 'Data'
-        },
-        count: {
-            type: 'integer',
-            title: 'Count'
-        },
-        skip: {
-            type: 'integer',
-            title: 'Skip'
-        },
-        limit: {
-            type: 'integer',
-            title: 'Limit'
-        }
-    },
-    type: 'object',
-    required: [
-        'data',
-        'count',
-        'skip',
-        'limit'
-    ],
-    title: 'PaginatedResponse[ItemPublic]'
 } as const;
 
 export const PaginatedResponse_UserPublic_Schema = {
@@ -250,6 +163,295 @@ export const PaginatedResponse_UserPublic_Schema = {
         'limit'
     ],
     title: 'PaginatedResponse[UserPublic]'
+} as const;
+
+export const RecoveryCodesGenerateResponseSchema = {
+    properties: {
+        codes: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Codes',
+            description: 'Recovery codes (plaintext returned ONLY on generation)'
+        },
+        remaining_count: {
+            type: 'integer',
+            title: 'Remaining Count',
+            description: 'Number of remaining unused codes'
+        },
+        message: {
+            type: 'string',
+            title: 'Message',
+            default: 'Lưu các mã nở nơiày  an toàn - bạn sẽ không thể xem lại chúng'
+        }
+    },
+    type: 'object',
+    required: [
+        'codes',
+        'remaining_count'
+    ],
+    title: 'RecoveryCodesGenerateResponse'
+} as const;
+
+export const RecoveryCodesStatusResponseSchema = {
+    properties: {
+        remaining_count: {
+            type: 'integer',
+            title: 'Remaining Count',
+            description: 'Number of remaining unused codes'
+        },
+        message: {
+            type: 'string',
+            title: 'Message',
+            description: 'Status message'
+        }
+    },
+    type: 'object',
+    required: [
+        'remaining_count',
+        'message'
+    ],
+    title: 'RecoveryCodesStatusResponse'
+} as const;
+
+export const RecoveryVerifyRequestSchema = {
+    properties: {
+        code: {
+            type: 'string',
+            maxLength: 9,
+            minLength: 9,
+            title: 'Code',
+            description: 'Recovery code (format: XXXX-XXXX)'
+        },
+        temp_token: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Temp Token',
+            description: 'Temp token from login (for verification during login)'
+        }
+    },
+    type: 'object',
+    required: [
+        'code'
+    ],
+    title: 'RecoveryVerifyRequest'
+} as const;
+
+export const RecoveryVerifyResponseSchema = {
+    properties: {
+        remaining_count: {
+            type: 'integer',
+            title: 'Remaining Count',
+            description: 'Number of remaining unused codes'
+        },
+        message: {
+            type: 'string',
+            title: 'Message',
+            description: 'Result message'
+        },
+        access_token: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Access Token',
+            description: 'JWT access token (returned only on successful login via recovery code)'
+        }
+    },
+    type: 'object',
+    required: [
+        'remaining_count',
+        'message'
+    ],
+    title: 'RecoveryVerifyResponse'
+} as const;
+
+export const TotpChallengeResponseSchema = {
+    properties: {
+        challenge_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Challenge Id',
+            description: 'Unique challenge ID for enrollment'
+        },
+        expires_in: {
+            type: 'integer',
+            title: 'Expires In',
+            description: 'Seconds until challenge expires'
+        }
+    },
+    type: 'object',
+    required: [
+        'challenge_id',
+        'expires_in'
+    ],
+    title: 'TotpChallengeResponse',
+    description: 'Response for POST /auth/totp/challenge'
+} as const;
+
+export const TotpEnrollResponseSchema = {
+    properties: {
+        secret: {
+            type: 'string',
+            title: 'Secret',
+            description: 'Base32 encoded secret'
+        },
+        qr_code: {
+            type: 'string',
+            title: 'Qr Code',
+            description: 'Base64 encoded PNG QR code'
+        },
+        otpauth_url: {
+            type: 'string',
+            title: 'Otpauth Url',
+            description: 'OTPAuth URL for authenticator apps'
+        }
+    },
+    type: 'object',
+    required: [
+        'secret',
+        'qr_code',
+        'otpauth_url'
+    ],
+    title: 'TotpEnrollResponse',
+    description: 'Response for POST /auth/totp/enroll'
+} as const;
+
+export const TotpStatusResponseSchema = {
+    properties: {
+        is_enabled: {
+            type: 'boolean',
+            title: 'Is Enabled'
+        },
+        message: {
+            type: 'string',
+            title: 'Message'
+        }
+    },
+    type: 'object',
+    required: [
+        'is_enabled',
+        'message'
+    ],
+    title: 'TotpStatusResponse',
+    description: 'Response for GET /auth/totp/status'
+} as const;
+
+export const TotpVerifyFlowAResponseSchema = {
+    properties: {
+        access_token: {
+            type: 'string',
+            title: 'Access Token',
+            description: 'JWT access token'
+        },
+        token_type: {
+            type: 'string',
+            title: 'Token Type',
+            description: 'Token type',
+            default: 'bearer'
+        },
+        expires_in: {
+            type: 'integer',
+            title: 'Expires In',
+            description: 'Token expiration in seconds'
+        },
+        user: {
+            additionalProperties: true,
+            type: 'object',
+            title: 'User',
+            description: 'User information'
+        }
+    },
+    type: 'object',
+    required: [
+        'access_token',
+        'expires_in',
+        'user'
+    ],
+    title: 'TotpVerifyFlowAResponse',
+    description: 'Response for successful TOTP verification (Flow A — login)'
+} as const;
+
+export const TotpVerifyFlowBResponseSchema = {
+    properties: {
+        message: {
+            type: 'string',
+            title: 'Message',
+            description: 'Success message',
+            default: 'TOTP đã được kích hoạt'
+        },
+        is_enabled: {
+            type: 'boolean',
+            title: 'Is Enabled',
+            description: 'TOTP enabled status',
+            default: true
+        },
+        recovery_codes: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Recovery Codes',
+            description: 'Plaintext recovery codes generated after enrollment. Shown ONCE — user must save them.'
+        }
+    },
+    type: 'object',
+    title: 'TotpVerifyFlowBResponse',
+    description: 'Response for successful TOTP enrollment (Flow B — enroll confirm)'
+} as const;
+
+export const TotpVerifyRequestSchema = {
+    properties: {
+        temp_token: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Temp Token',
+            description: 'Flow A: temp token from login'
+        },
+        challenge_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'uuid'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Challenge Id',
+            description: 'Flow B: challenge ID from /auth/totp/challenge'
+        },
+        totp_code: {
+            type: 'string',
+            maxLength: 8,
+            minLength: 6,
+            title: 'Totp Code',
+            description: 'TOTP code from authenticator'
+        }
+    },
+    type: 'object',
+    required: [
+        'totp_code'
+    ],
+    title: 'TotpVerifyRequest',
+    description: 'Combined request for POST /auth/totp/verify.\nFlow A (login):    provide temp_token + totp_code\nFlow B (enroll):   provide challenge_id + totp_code'
 } as const;
 
 export const UserCreateSchema = {

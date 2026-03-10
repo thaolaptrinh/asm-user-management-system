@@ -2,7 +2,7 @@
 
 import { type Client, type Options as Options2, type TDataShape, urlSearchParamsBodySerializer } from './client';
 import { client } from './client.gen';
-import type { CreateItemData, CreateItemErrors, CreateItemResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteItemData, DeleteItemErrors, DeleteItemResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, GetItemData, GetItemErrors, GetItemResponses, GetMeData, GetMeResponses, GetUserData, GetUserErrors, GetUserResponses, ListItemsData, ListItemsErrors, ListItemsResponses, ListUsersData, ListUsersErrors, ListUsersResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, RecoverPasswordData, RecoverPasswordErrors, RecoverPasswordResponses, RegisterData, RegisterErrors, RegisterResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, UpdateItemData, UpdateItemErrors, UpdateItemResponses, UpdateMeData, UpdateMeErrors, UpdateMeResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses } from './types.gen';
+import type { ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, GenerateRecoveryCodesData, GenerateRecoveryCodesResponses, GetMeData, GetMeResponses, GetRecoveryCodesStatusData, GetRecoveryCodesStatusResponses, GetUserData, GetUserErrors, GetUserResponses, ListUsersData, ListUsersErrors, ListUsersResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, RecoverPasswordData, RecoverPasswordErrors, RecoverPasswordResponses, RegisterData, RegisterErrors, RegisterResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, TotpChallengeData, TotpChallengeResponses, TotpEnrollData, TotpEnrollResponses, TotpStatusData, TotpStatusResponses, TotpVerifyData, TotpVerifyErrors, TotpVerifyResponses, UpdateMeData, UpdateMeErrors, UpdateMeResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses, VerifyRecoveryCodeData, VerifyRecoveryCodeErrors, VerifyRecoveryCodeResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -21,6 +21,8 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 export class auth {
     /**
      * Login
+     *
+     * Step 1 of 2FA: verify email/password, return short-lived temp_token.
      */
     public static login<ThrowOnError extends boolean = false>(options: Options<LoginData, ThrowOnError>) {
         return (options.client ?? client).post<LoginResponses, LoginErrors, ThrowOnError>({
@@ -44,7 +46,7 @@ export class auth {
     /**
      * Register
      *
-     * Register a new user, set auth cookie, and return success message.
+     * Register a new user. Client must then go through the TOTP enroll flow.
      */
     public static register<ThrowOnError extends boolean = false>(options: Options<RegisterData, ThrowOnError>) {
         return (options.client ?? client).post<RegisterResponses, RegisterErrors, ThrowOnError>({
@@ -74,6 +76,124 @@ export class auth {
     public static resetPassword<ThrowOnError extends boolean = false>(options: Options<ResetPasswordData, ThrowOnError>) {
         return (options.client ?? client).post<ResetPasswordResponses, ResetPasswordErrors, ThrowOnError>({
             url: '/api/v1/auth/reset-password/',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+}
+
+export class totp {
+    /**
+     * Get Totp Status
+     *
+     * Check whether the current user has TOTP enabled.
+     */
+    public static totpStatus<ThrowOnError extends boolean = false>(options?: Options<TotpStatusData, ThrowOnError>) {
+        return (options?.client ?? client).get<TotpStatusResponses, unknown, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/auth/totp/status',
+            ...options
+        });
+    }
+    
+    /**
+     * Enroll Totp
+     *
+     * Step 1 of enrollment: generate secret + QR code.
+     * Returns 409 if TOTP is already active.
+     */
+    public static totpEnroll<ThrowOnError extends boolean = false>(options?: Options<TotpEnrollData, ThrowOnError>) {
+        return (options?.client ?? client).post<TotpEnrollResponses, unknown, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/auth/totp/enroll',
+            ...options
+        });
+    }
+    
+    /**
+     * Create Totp Challenge
+     *
+     * Step 2 of enrollment: create an in-memory challenge (TTL 60s).
+     * Use the returned challenge_id in the verify endpoint (Flow B).
+     */
+    public static totpChallenge<ThrowOnError extends boolean = false>(options?: Options<TotpChallengeData, ThrowOnError>) {
+        return (options?.client ?? client).post<TotpChallengeResponses, unknown, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/auth/totp/challenge',
+            ...options
+        });
+    }
+    
+    /**
+     * Verify Totp
+     *
+     * Dual-purpose TOTP verify endpoint.
+     *
+     * Flow A (login — send temp_token + totp_code):
+     * Validates temp_token, verifies TOTP code, sets access_token cookie, returns access_token.
+     *
+     * Flow B (enrollment confirm — send challenge_id + totp_code):
+     * Resolves challenge to user, verifies TOTP, marks secret as verified.
+     * Optionally accepts temp_token to bind enrollment to the current login session.
+     * Auto-generates recovery codes and returns them (shown once — user must save).
+     * Client must then call Flow A to obtain an access_token.
+     */
+    public static totpVerify<ThrowOnError extends boolean = false>(options: Options<TotpVerifyData, ThrowOnError>) {
+        return (options.client ?? client).post<TotpVerifyResponses, TotpVerifyErrors, ThrowOnError>({
+            url: '/api/v1/auth/totp/verify',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+}
+
+export class totpRecovery {
+    /**
+     * Get Recovery Codes Status
+     *
+     * Get remaining recovery codes count.
+     * Note: Plaintext codes are NOT returned - only count.
+     */
+    public static getRecoveryCodesStatus<ThrowOnError extends boolean = false>(options?: Options<GetRecoveryCodesStatusData, ThrowOnError>) {
+        return (options?.client ?? client).get<GetRecoveryCodesStatusResponses, unknown, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/auth/totp/recovery',
+            ...options
+        });
+    }
+    
+    /**
+     * Generate Recovery Codes
+     *
+     * Generate new recovery codes.
+     * WARNING: Plaintext codes are returned ONLY on generation - user must save them now.
+     * This will invalidate all existing recovery codes.
+     */
+    public static generateRecoveryCodes<ThrowOnError extends boolean = false>(options?: Options<GenerateRecoveryCodesData, ThrowOnError>) {
+        return (options?.client ?? client).post<GenerateRecoveryCodesResponses, unknown, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/auth/totp/recovery',
+            ...options
+        });
+    }
+    
+    /**
+     * Verify Recovery Code
+     *
+     * Verify a recovery code (used for login when TOTP device is unavailable).
+     * The code will be marked as used after successful verification.
+     * On success, sets an HttpOnly access_token cookie and returns the access token.
+     * Raises 401 on invalid or already-used code.
+     */
+    public static verifyRecoveryCode<ThrowOnError extends boolean = false>(options: Options<VerifyRecoveryCodeData, ThrowOnError>) {
+        return (options.client ?? client).post<VerifyRecoveryCodeResponses, VerifyRecoveryCodeErrors, ThrowOnError>({
+            url: '/api/v1/auth/totp/recovery/verify',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -172,64 +292,16 @@ export class users {
             }
         });
     }
-}
-
-export class items {
-    /**
-     * List Items
-     */
-    public static listItems<ThrowOnError extends boolean = false>(options?: Options<ListItemsData, ThrowOnError>) {
-        return (options?.client ?? client).get<ListItemsResponses, ListItemsErrors, ThrowOnError>({
-            security: [{ scheme: 'bearer', type: 'http' }],
-            url: '/api/v1/items/',
-            ...options
-        });
-    }
     
     /**
-     * Create Item
+     * Change Password
+     *
+     * Change user password with security best practices.
      */
-    public static createItem<ThrowOnError extends boolean = false>(options: Options<CreateItemData, ThrowOnError>) {
-        return (options.client ?? client).post<CreateItemResponses, CreateItemErrors, ThrowOnError>({
+    public static changePassword<ThrowOnError extends boolean = false>(options: Options<ChangePasswordData, ThrowOnError>) {
+        return (options.client ?? client).put<ChangePasswordResponses, ChangePasswordErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
-            url: '/api/v1/items/',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Delete Item
-     */
-    public static deleteItem<ThrowOnError extends boolean = false>(options: Options<DeleteItemData, ThrowOnError>) {
-        return (options.client ?? client).delete<DeleteItemResponses, DeleteItemErrors, ThrowOnError>({
-            security: [{ scheme: 'bearer', type: 'http' }],
-            url: '/api/v1/items/{item_id}',
-            ...options
-        });
-    }
-    
-    /**
-     * Get Item
-     */
-    public static getItem<ThrowOnError extends boolean = false>(options: Options<GetItemData, ThrowOnError>) {
-        return (options.client ?? client).get<GetItemResponses, GetItemErrors, ThrowOnError>({
-            security: [{ scheme: 'bearer', type: 'http' }],
-            url: '/api/v1/items/{item_id}',
-            ...options
-        });
-    }
-    
-    /**
-     * Update Item
-     */
-    public static updateItem<ThrowOnError extends boolean = false>(options: Options<UpdateItemData, ThrowOnError>) {
-        return (options.client ?? client).patch<UpdateItemResponses, UpdateItemErrors, ThrowOnError>({
-            security: [{ scheme: 'bearer', type: 'http' }],
-            url: '/api/v1/items/{item_id}',
+            url: '/api/v1/users/me/password',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

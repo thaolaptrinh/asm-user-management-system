@@ -35,6 +35,22 @@ export type BodyLogin = {
 };
 
 /**
+ * ChangePassword
+ *
+ * Schema for password change.
+ */
+export type ChangePassword = {
+    /**
+     * Current Password
+     */
+    current_password: string;
+    /**
+     * New Password
+     */
+    new_password: string;
+};
+
+/**
  * HTTPValidationError
  */
 export type HttpValidationError = {
@@ -45,53 +61,21 @@ export type HttpValidationError = {
 };
 
 /**
- * ItemCreate
+ * LoginTempTokenResponse
+ *
+ * Response for POST /auth/login — step 1 of 2FA flow.
  */
-export type ItemCreate = {
+export type LoginTempTokenResponse = {
     /**
-     * Title
+     * Temp Token
+     *
+     * Short-lived token for TOTP verification
      */
-    title: string;
+    temp_token: string;
     /**
-     * Description
+     * Message
      */
-    description?: string | null;
-};
-
-/**
- * ItemPublic
- */
-export type ItemPublic = {
-    /**
-     * Title
-     */
-    title: string;
-    /**
-     * Description
-     */
-    description?: string | null;
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Owner Id
-     */
-    owner_id: string;
-};
-
-/**
- * ItemUpdate
- */
-export type ItemUpdate = {
-    /**
-     * Title
-     */
-    title?: string | null;
-    /**
-     * Description
-     */
-    description?: string | null;
+    message?: string;
 };
 
 /**
@@ -102,28 +86,6 @@ export type Message = {
      * Message
      */
     message: string;
-};
-
-/**
- * PaginatedResponse[ItemPublic]
- */
-export type PaginatedResponseItemPublic = {
-    /**
-     * Data
-     */
-    data: Array<ItemPublic>;
-    /**
-     * Count
-     */
-    count: number;
-    /**
-     * Skip
-     */
-    skip: number;
-    /**
-     * Limit
-     */
-    limit: number;
 };
 
 /**
@@ -146,6 +108,238 @@ export type PaginatedResponseUserPublic = {
      * Limit
      */
     limit: number;
+};
+
+/**
+ * RecoveryCodesGenerateResponse
+ */
+export type RecoveryCodesGenerateResponse = {
+    /**
+     * Codes
+     *
+     * Recovery codes (plaintext returned ONLY on generation)
+     */
+    codes: Array<string>;
+    /**
+     * Remaining Count
+     *
+     * Number of remaining unused codes
+     */
+    remaining_count: number;
+    /**
+     * Message
+     */
+    message?: string;
+};
+
+/**
+ * RecoveryCodesStatusResponse
+ */
+export type RecoveryCodesStatusResponse = {
+    /**
+     * Remaining Count
+     *
+     * Number of remaining unused codes
+     */
+    remaining_count: number;
+    /**
+     * Message
+     *
+     * Status message
+     */
+    message: string;
+};
+
+/**
+ * RecoveryVerifyRequest
+ */
+export type RecoveryVerifyRequest = {
+    /**
+     * Code
+     *
+     * Recovery code (format: XXXX-XXXX)
+     */
+    code: string;
+    /**
+     * Temp Token
+     *
+     * Temp token from login (for verification during login)
+     */
+    temp_token?: string | null;
+};
+
+/**
+ * RecoveryVerifyResponse
+ */
+export type RecoveryVerifyResponse = {
+    /**
+     * Remaining Count
+     *
+     * Number of remaining unused codes
+     */
+    remaining_count: number;
+    /**
+     * Message
+     *
+     * Result message
+     */
+    message: string;
+    /**
+     * Access Token
+     *
+     * JWT access token (returned only on successful login via recovery code)
+     */
+    access_token?: string | null;
+};
+
+/**
+ * TotpChallengeResponse
+ *
+ * Response for POST /auth/totp/challenge
+ */
+export type TotpChallengeResponse = {
+    /**
+     * Challenge Id
+     *
+     * Unique challenge ID for enrollment
+     */
+    challenge_id: string;
+    /**
+     * Expires In
+     *
+     * Seconds until challenge expires
+     */
+    expires_in: number;
+};
+
+/**
+ * TotpEnrollResponse
+ *
+ * Response for POST /auth/totp/enroll
+ */
+export type TotpEnrollResponse = {
+    /**
+     * Secret
+     *
+     * Base32 encoded secret
+     */
+    secret: string;
+    /**
+     * Qr Code
+     *
+     * Base64 encoded PNG QR code
+     */
+    qr_code: string;
+    /**
+     * Otpauth Url
+     *
+     * OTPAuth URL for authenticator apps
+     */
+    otpauth_url: string;
+};
+
+/**
+ * TotpStatusResponse
+ *
+ * Response for GET /auth/totp/status
+ */
+export type TotpStatusResponse = {
+    /**
+     * Is Enabled
+     */
+    is_enabled: boolean;
+    /**
+     * Message
+     */
+    message: string;
+};
+
+/**
+ * TotpVerifyFlowAResponse
+ *
+ * Response for successful TOTP verification (Flow A — login)
+ */
+export type TotpVerifyFlowAResponse = {
+    /**
+     * Access Token
+     *
+     * JWT access token
+     */
+    access_token: string;
+    /**
+     * Token Type
+     *
+     * Token type
+     */
+    token_type?: string;
+    /**
+     * Expires In
+     *
+     * Token expiration in seconds
+     */
+    expires_in: number;
+    /**
+     * User
+     *
+     * User information
+     */
+    user: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * TotpVerifyFlowBResponse
+ *
+ * Response for successful TOTP enrollment (Flow B — enroll confirm)
+ */
+export type TotpVerifyFlowBResponse = {
+    /**
+     * Message
+     *
+     * Success message
+     */
+    message?: string;
+    /**
+     * Is Enabled
+     *
+     * TOTP enabled status
+     */
+    is_enabled?: boolean;
+    /**
+     * Recovery Codes
+     *
+     * Plaintext recovery codes generated after enrollment. Shown ONCE — user must save them.
+     */
+    recovery_codes?: Array<string>;
+};
+
+/**
+ * TotpVerifyRequest
+ *
+ * Combined request for POST /auth/totp/verify.
+ * Flow A (login):    provide temp_token + totp_code
+ * Flow B (enroll):   provide challenge_id + totp_code
+ */
+export type TotpVerifyRequest = {
+    /**
+     * Temp Token
+     *
+     * Flow A: temp token from login
+     */
+    temp_token?: string | null;
+    /**
+     * Challenge Id
+     *
+     * Flow B: challenge ID from /auth/totp/challenge
+     */
+    challenge_id?: string | null;
+    /**
+     * Totp Code
+     *
+     * TOTP code from authenticator
+     */
+    totp_code: string;
 };
 
 /**
@@ -318,7 +512,7 @@ export type LoginResponses = {
     /**
      * Successful Response
      */
-    200: Message;
+    200: LoginTempTokenResponse;
 };
 
 export type LoginResponse = LoginResponses[keyof LoginResponses];
@@ -347,6 +541,10 @@ export type RegisterData = {
 };
 
 export type RegisterErrors = {
+    /**
+     * Email already registered
+     */
+    409: Message;
     /**
      * Validation Error
      */
@@ -418,6 +616,138 @@ export type ResetPasswordResponses = {
 };
 
 export type ResetPasswordResponse = ResetPasswordResponses[keyof ResetPasswordResponses];
+
+export type TotpStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/totp/status';
+};
+
+export type TotpStatusResponses = {
+    /**
+     * Successful Response
+     */
+    200: TotpStatusResponse;
+};
+
+export type TotpStatusResponse2 = TotpStatusResponses[keyof TotpStatusResponses];
+
+export type TotpEnrollData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/totp/enroll';
+};
+
+export type TotpEnrollResponses = {
+    /**
+     * Successful Response
+     */
+    200: TotpEnrollResponse;
+};
+
+export type TotpEnrollResponse2 = TotpEnrollResponses[keyof TotpEnrollResponses];
+
+export type TotpChallengeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/totp/challenge';
+};
+
+export type TotpChallengeResponses = {
+    /**
+     * Successful Response
+     */
+    200: TotpChallengeResponse;
+};
+
+export type TotpChallengeResponse2 = TotpChallengeResponses[keyof TotpChallengeResponses];
+
+export type TotpVerifyData = {
+    body: TotpVerifyRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/totp/verify';
+};
+
+export type TotpVerifyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TotpVerifyError = TotpVerifyErrors[keyof TotpVerifyErrors];
+
+export type TotpVerifyResponses = {
+    /**
+     * Response Totpverify
+     *
+     * Successful Response
+     */
+    200: TotpVerifyFlowAResponse | TotpVerifyFlowBResponse;
+};
+
+export type TotpVerifyResponse = TotpVerifyResponses[keyof TotpVerifyResponses];
+
+export type GetRecoveryCodesStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/totp/recovery';
+};
+
+export type GetRecoveryCodesStatusResponses = {
+    /**
+     * Successful Response
+     */
+    200: RecoveryCodesStatusResponse;
+};
+
+export type GetRecoveryCodesStatusResponse = GetRecoveryCodesStatusResponses[keyof GetRecoveryCodesStatusResponses];
+
+export type GenerateRecoveryCodesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/totp/recovery';
+};
+
+export type GenerateRecoveryCodesResponses = {
+    /**
+     * Successful Response
+     */
+    200: RecoveryCodesGenerateResponse;
+};
+
+export type GenerateRecoveryCodesResponse = GenerateRecoveryCodesResponses[keyof GenerateRecoveryCodesResponses];
+
+export type VerifyRecoveryCodeData = {
+    body: RecoveryVerifyRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/totp/recovery/verify';
+};
+
+export type VerifyRecoveryCodeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type VerifyRecoveryCodeError = VerifyRecoveryCodeErrors[keyof VerifyRecoveryCodeErrors];
+
+export type VerifyRecoveryCodeResponses = {
+    /**
+     * Successful Response
+     */
+    200: RecoveryVerifyResponse;
+};
+
+export type VerifyRecoveryCodeResponse = VerifyRecoveryCodeResponses[keyof VerifyRecoveryCodeResponses];
 
 export type GetMeData = {
     body?: never;
@@ -502,6 +832,10 @@ export type CreateUserData = {
 };
 
 export type CreateUserErrors = {
+    /**
+     * Email already registered
+     */
+    409: Message;
     /**
      * Validation Error
      */
@@ -609,151 +943,27 @@ export type UpdateUserResponses = {
 
 export type UpdateUserResponse = UpdateUserResponses[keyof UpdateUserResponses];
 
-export type ListItemsData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Skip
-         */
-        skip?: number;
-        /**
-         * Limit
-         */
-        limit?: number;
-    };
-    url: '/api/v1/items/';
-};
-
-export type ListItemsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ListItemsError = ListItemsErrors[keyof ListItemsErrors];
-
-export type ListItemsResponses = {
-    /**
-     * Successful Response
-     */
-    200: PaginatedResponseItemPublic;
-};
-
-export type ListItemsResponse = ListItemsResponses[keyof ListItemsResponses];
-
-export type CreateItemData = {
-    body: ItemCreate;
+export type ChangePasswordData = {
+    body: ChangePassword;
     path?: never;
     query?: never;
-    url: '/api/v1/items/';
+    url: '/api/v1/users/me/password';
 };
 
-export type CreateItemErrors = {
+export type ChangePasswordErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type CreateItemError = CreateItemErrors[keyof CreateItemErrors];
+export type ChangePasswordError = ChangePasswordErrors[keyof ChangePasswordErrors];
 
-export type CreateItemResponses = {
+export type ChangePasswordResponses = {
     /**
      * Successful Response
      */
-    201: ItemPublic;
+    204: void;
 };
 
-export type CreateItemResponse = CreateItemResponses[keyof CreateItemResponses];
-
-export type DeleteItemData = {
-    body?: never;
-    path: {
-        /**
-         * Item Id
-         */
-        item_id: string;
-    };
-    query?: never;
-    url: '/api/v1/items/{item_id}';
-};
-
-export type DeleteItemErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteItemError = DeleteItemErrors[keyof DeleteItemErrors];
-
-export type DeleteItemResponses = {
-    /**
-     * Successful Response
-     */
-    200: Message;
-};
-
-export type DeleteItemResponse = DeleteItemResponses[keyof DeleteItemResponses];
-
-export type GetItemData = {
-    body?: never;
-    path: {
-        /**
-         * Item Id
-         */
-        item_id: string;
-    };
-    query?: never;
-    url: '/api/v1/items/{item_id}';
-};
-
-export type GetItemErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetItemError = GetItemErrors[keyof GetItemErrors];
-
-export type GetItemResponses = {
-    /**
-     * Successful Response
-     */
-    200: ItemPublic;
-};
-
-export type GetItemResponse = GetItemResponses[keyof GetItemResponses];
-
-export type UpdateItemData = {
-    body: ItemUpdate;
-    path: {
-        /**
-         * Item Id
-         */
-        item_id: string;
-    };
-    query?: never;
-    url: '/api/v1/items/{item_id}';
-};
-
-export type UpdateItemErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type UpdateItemError = UpdateItemErrors[keyof UpdateItemErrors];
-
-export type UpdateItemResponses = {
-    /**
-     * Successful Response
-     */
-    200: ItemPublic;
-};
-
-export type UpdateItemResponse = UpdateItemResponses[keyof UpdateItemResponses];
+export type ChangePasswordResponse = ChangePasswordResponses[keyof ChangePasswordResponses];
