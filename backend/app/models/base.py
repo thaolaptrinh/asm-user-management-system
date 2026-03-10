@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import CHAR, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -25,7 +25,7 @@ class TimestampMixin:
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        onupdate=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
 
