@@ -3,7 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { auth } from "@/client/sdk.gen"
+import { users } from "@/client/sdk.gen"
 import {
   Form,
   FormControl,
@@ -53,16 +53,12 @@ const ChangePassword = () => {
 
   const mutation = useMutation({
     mutationFn: (body: { current_password: string; new_password: string }) =>
-      // TODO: Backend does not expose a dedicated change-password endpoint yet.
-      // Using resetPassword as a placeholder — replace once the endpoint exists.
-      auth
-        .resetPassword({
-          body: { token: "", new_password: body.new_password },
-          throwOnError: true,
-        })
-        .then((r) => r.data),
+      users.changePassword({
+      body: body,
+      throwOnError: true,
+    }).then((r) => r.data),
     onSuccess: () => {
-      showSuccessToast("Password updated successfully")
+      showSuccessToast("Password updated successfully. Other sessions have been signed out.")
       form.reset()
     },
     onError: handleError.bind(showErrorToast),

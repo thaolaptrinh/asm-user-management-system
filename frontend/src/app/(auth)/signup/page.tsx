@@ -3,8 +3,9 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation } from "@tanstack/react-query"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { useForm } from "react-hook-form"
-import { toast } from "sonner"
 import { z } from "zod"
 import { auth } from "@/client/sdk.gen"
 import {
@@ -39,6 +40,8 @@ const formSchema = z
 type FormData = z.infer<typeof formSchema>
 
 export default function SignUpPage() {
+  const router = useRouter()
+  const [error, setError] = useState<string | null>(null)
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     mode: "onBlur",
@@ -59,30 +62,29 @@ export default function SignUpPage() {
     }) => {
       const { data: res } = await auth.register({
         body: data,
+        throwOnError: true,
       })
 
-      if (!res) {
-        throw new Error("Failed to create account")
-      }
-
-      return res
+      return res!
     },
 
     onSuccess: () => {
-      toast.success("Account created successfully")
-      window.location.href = "/"
+      router.push("/login?registered=true")
     },
 
-    onError: (error: Error) => {
-      toast.error(error.message)
+    onError: (err: unknown) => {
+      const message =
+        (err instanceof Error && err.message) ||
+        (typeof err === 'object' && err !== null && 'detail' in err && String(err.detail)) ||
+        "Registration failed. Please try again."
+      setError(message)
     },
   })
 
   const onSubmit = (data: FormData) => {
     if (mutation.isPending) return
-
+    setError(null)
     const { confirm_password, ...submitData } = data
-
     mutation.mutate(submitData)
   }
 
@@ -175,6 +177,10 @@ export default function SignUpPage() {
               </FormItem>
             )}
           />
+
+          {error && (
+            <p className="text-sm text-destructive text-center">{error}</p>
+          )}
 
           <LoadingButton
             type="submit"

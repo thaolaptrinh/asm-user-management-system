@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "FastAPI Next.js Template",
-  description: "FastAPI Next.js Template",
+  title: "User Management System with TOTP 2FA",
+  description: "User Management System with Two-Factor Authentication (2FA) using TOTP (Time-based One-Time Password)",
   icons: {
     icon: "/assets/images/favicon.png",
   },

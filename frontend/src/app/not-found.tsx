@@ -21,7 +21,7 @@ export default function NotFound() {
         The page you are looking for was not found.
       </p>
       <div className="z-10">
-        <Link href="/items">
+        <Link href="/">
           <Button className="mt-4">Go Back</Button>
         </Link>
       </div>

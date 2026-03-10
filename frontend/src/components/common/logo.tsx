@@ -46,7 +46,7 @@ export function Logo({
       <>
         <Image
           src={fullSrc}
-          alt="FastAPI"
+          alt="User Management System"
           width={120}
           height={24}
           priority
@@ -59,7 +59,7 @@ export function Logo({
 
         <Image
           src={iconSrc}
-          alt="FastAPI"
+          alt="User Management System"
           width={20}
           height={20}
           suppressHydrationWarning
@@ -72,7 +72,7 @@ export function Logo({
     ) : (
       <Image
         src={variant === "full" ? fullSrc : iconSrc}
-        alt="FastAPI"
+        alt="User Management System"
         width={variant === "full" ? 120 : 20}
         height={variant === "full" ? 24 : 20}
         priority

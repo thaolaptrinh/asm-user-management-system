@@ -35,15 +35,14 @@ const DeleteUser = ({ id, onSuccess }: DeleteUserProps) => {
       users
         .deleteUser({ path: { user_id: id }, throwOnError: true })
         .then((r) => r.data),
-    onSuccess: () => {
+    onSuccess: async () => {
       showSuccessToast("The user was deleted successfully")
+      await queryClient.invalidateQueries({ queryKey: ["users"] })
+      await queryClient.refetchQueries({ queryKey: ["users"] })
       setIsOpen(false)
       onSuccess()
     },
     onError: handleError.bind(showErrorToast),
-    onSettled: () => {
-      queryClient.invalidateQueries()
-    },
   })
 
   const onSubmit = async () => {

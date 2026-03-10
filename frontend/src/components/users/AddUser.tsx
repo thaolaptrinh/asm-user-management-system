@@ -1,11 +1,11 @@
 "use client"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Pencil } from "lucide-react"
+import { Plus } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { type UserPublic, users } from "@/client"
+import { type UserCreate, users } from "@/client"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -16,8 +16,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import {
   Form,
   FormControl,
@@ -37,27 +37,23 @@ const formSchema = z
     full_name: z.string().optional(),
     password: z
       .string()
-      .min(8, { message: "Password must be at least 8 characters" })
-      .optional()
-      .or(z.literal("")),
-    confirm_password: z.string().optional(),
-    is_superuser: z.boolean().optional(),
-    is_active: z.boolean().optional(),
+      .min(1, { message: "Password is required" })
+      .min(8, { message: "Password must be at least 8 characters" }),
+    confirm_password: z
+      .string()
+      .min(1, { message: "Please confirm your password" }),
+    is_active: z.boolean(),
   })
-  .refine((data) => !data.password || data.password === data.confirm_password, {
+  .refine((data) => data.password === data.confirm_password, {
     message: "The passwords don't match",
     path: ["confirm_password"],
   })
 
 type FormData = z.infer<typeof formSchema>
 
-interface EditUserProps {
-  user: UserPublic
-  onSuccess: () => void
-}
-
-const EditUser = ({ user, onSuccess }: EditUserProps) => {
+const AddUser = () => {
   const [isOpen, setIsOpen] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const { showSuccessToast, showErrorToast } = useCustomToast()
 
@@ -66,58 +62,56 @@ const EditUser = ({ user, onSuccess }: EditUserProps) => {
     mode: "onBlur",
     criteriaMode: "all",
     defaultValues: {
-      email: user.email,
-      full_name: user.full_name ?? undefined,
-      is_superuser: user.is_superuser,
-      is_active: user.is_active,
+      email: "",
+      full_name: "",
+      password: "",
+      confirm_password: "",
+      is_active: false,
     },
   })
 
   const mutation = useMutation({
-    mutationFn: (opts: {
-      path: { user_id: string }
-      body: Parameters<typeof users.updateUser>[0]["body"]
-    }) => users.updateUser({ ...opts, throwOnError: true }).then((r) => r.data),
-    onSuccess: () => {
-      showSuccessToast("User updated successfully")
+    mutationFn: (body: UserCreate) =>
+      users.createUser({ body, throwOnError: true }).then((r) => r.data),
+    onSuccess: async () => {
+      showSuccessToast("User created successfully")
+      setSubmitError(null)
+      await queryClient.invalidateQueries({ queryKey: ["users"] })
+      await queryClient.refetchQueries({ queryKey: ["users"] })
+      form.reset()
       setIsOpen(false)
-      onSuccess()
     },
-    onError: handleError.bind(showErrorToast),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] })
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message :
+        (typeof err === 'object' && err !== null && 'detail' in err ? String(err.detail) :
+        "Failed to create user")
+      setSubmitError(message)
+      showErrorToast(message)
     },
   })
 
   const onSubmit = (data: FormData) => {
-    const { confirm_password: _, ...submitData } = data
-    if (!submitData.password) {
-      delete submitData.password
-    }
-    mutation.mutate({
-      path: { user_id: user.id },
-      body: submitData as Parameters<typeof users.updateUser>[0]["body"],
-    })
+    setSubmitError(null)
+    mutation.mutate(data)
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DropdownMenuItem
-        onSelect={(e) => e.preventDefault()}
-        onClick={() => setIsOpen(true)}
-      >
-        <Pencil />
-        Edit User
-      </DropdownMenuItem>
+      <DialogTrigger asChild>
+        <Button className="my-4">
+          <Plus className="mr-2" />
+          Add User
+        </Button>
+      </DialogTrigger>
       <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add User</DialogTitle>
+          <DialogDescription>
+            Fill in the form below to add a new user to the system.
+          </DialogDescription>
+        </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
-            <DialogHeader>
-              <DialogTitle>Edit User</DialogTitle>
-              <DialogDescription>
-                Update the user details below.
-              </DialogDescription>
-            </DialogHeader>
             <div className="grid gap-4 py-4">
               <FormField
                 control={form.control}
@@ -159,12 +153,15 @@ const EditUser = ({ user, onSuccess }: EditUserProps) => {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Set Password</FormLabel>
+                    <FormLabel>
+                      Set Password <span className="text-destructive">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input
                         placeholder="Password"
                         type="password"
                         {...field}
+                        required
                       />
                     </FormControl>
                     <FormMessage />
@@ -177,31 +174,19 @@ const EditUser = ({ user, onSuccess }: EditUserProps) => {
                 name="confirm_password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Confirm Password</FormLabel>
+                    <FormLabel>
+                      Confirm Password{" "}
+                      <span className="text-destructive">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input
                         placeholder="Password"
                         type="password"
                         {...field}
+                        required
                       />
                     </FormControl>
                     <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="is_superuser"
-                render={({ field }) => (
-                  <FormItem className="flex items-center gap-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="font-normal">Is superuser?</FormLabel>
                   </FormItem>
                 )}
               />
@@ -223,6 +208,12 @@ const EditUser = ({ user, onSuccess }: EditUserProps) => {
               />
             </div>
 
+            {submitError && (
+              <div className="text-sm text-destructive text-center py-2">
+                {submitError}
+              </div>
+            )}
+
             <DialogFooter>
               <DialogClose asChild>
                 <Button variant="outline" disabled={mutation.isPending}>
@@ -240,4 +231,4 @@ const EditUser = ({ user, onSuccess }: EditUserProps) => {
   )
 }
 
-export default EditUser
+export default AddUser

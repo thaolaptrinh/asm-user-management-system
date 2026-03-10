@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import ChangePassword from "@/components/user-settings/ChangePassword"
 import DeleteAccount from "@/components/user-settings/DeleteAccount"
 import UserInformation from "@/components/user-settings/UserInformation"
+import TotpSettings from "@/components/user-settings/TotpSettings"
 
 export default function SettingsPage() {
   return (
@@ -13,6 +14,7 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="password">Password</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="mt-4">
@@ -24,6 +26,10 @@ export default function SettingsPage() {
 
         <TabsContent value="password" className="mt-4">
           <ChangePassword />
+        </TabsContent>
+
+        <TabsContent value="security" className="mt-4">
+          <TotpSettings />
         </TabsContent>
       </Tabs>
     </div>

@@ -1,15 +1,14 @@
 "use client"
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useRouter } from "next/navigation"
 import { auth, users } from "@/client/sdk.gen"
 
 /**
- * Login — POSTs credentials to the backend.
- * The backend sets an HttpOnly `access_token` cookie; no token handling needed here.
+ * Step 1 of 2FA login — POSTs credentials, returns temp_token.
+ * The caller must then complete TOTP verification to receive an access_token cookie.
  */
 export function useLogin() {
-  const queryClient = useQueryClient()
-
   return useMutation({
     mutationFn: async (credentials: { email: string; password: string }) => {
       const response = await auth.login({
@@ -19,16 +18,28 @@ export function useLogin() {
         },
         throwOnError: true,
       })
-      await queryClient.invalidateQueries({ queryKey: ["me"] })
-      await queryClient.fetchQuery({
-        queryKey: ["me"],
-        queryFn: async () => {
-          const { data } = await users.getMe()
-          if (!data) throw new Error("Failed to fetch user")
-          return data
-        },
-      })
-      return response.data
+      return response.data // { temp_token: string }
+    },
+  })
+}
+
+/**
+ * Finalise login after TOTP/recovery verification — backend has set the HttpOnly cookie.
+ * Fetches the authenticated user and redirects to dashboard.
+ */
+export function useFinaliseLogin() {
+  const queryClient = useQueryClient()
+  const router = useRouter()
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await users.getMe()
+      if (!data) throw new Error("Failed to fetch user")
+      queryClient.setQueryData(["me"], data)
+      return data
+    },
+    onSuccess: () => {
+      router.push("/")
     },
   })
 }

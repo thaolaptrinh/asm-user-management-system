@@ -1,22 +1,12 @@
 "use client"
 
-import { Github, Linkedin, Twitter } from "lucide-react"
+import { Github } from "lucide-react"
 
 const socialLinks = [
   {
     icon: Github,
-    href: "https://github.com/fastapi/fastapi",
+    href: "https://github.com/thaolaptrinh/asm-user-management-system",
     label: "GitHub",
-  },
-  {
-    icon: Twitter,
-    href: "https://x.com/fastapi",
-    label: "X",
-  },
-  {
-    icon: Linkedin,
-    href: "https://linkedin.com/company/fastapi",
-    label: "LinkedIn",
   },
 ]
 
@@ -27,7 +17,7 @@ export function Footer() {
     <footer className="border-t py-4 px-6">
       <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
         <p className="text-muted-foreground text-sm">
-          Full Stack FastAPI & Next.js Template - {currentYear}
+          User Management System with TOTP 2FA - {currentYear}
         </p>
 
         <div className="flex items-center gap-4">

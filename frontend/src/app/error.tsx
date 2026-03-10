@@ -30,7 +30,7 @@ export default function ErrorPage({
       </p>
       <div className="z-10 flex flex-wrap items-center justify-center gap-2">
         <Button onClick={reset}>Try again</Button>
-        <Link href="/items">
+        <Link href="/">
           <Button variant="outline">Go Home</Button>
         </Link>
       </div>

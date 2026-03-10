@@ -1,39 +1,26 @@
 "use client"
 import { useQuery } from "@tanstack/react-query"
-import { useRouter } from "next/navigation"
-import { useEffect } from "react"
 import { users as usersApi } from "@/client/sdk.gen"
-import AddUser from "@/components/admin/AddUser"
-import { columns, type UserTableData } from "@/components/admin/columns"
+import AddUser from "@/components/users/AddUser"
+import { columns, type UserTableData } from "@/components/users/columns"
 import { DataTable } from "@/components/data-table"
 import PendingUsers from "@/components/pending/PendingUsers"
 import { useAuth } from "@/hooks/useAuth"
 
-export default function AdminPage() {
+export default function UsersPage() {
   const { user } = useAuth()
-  const router = useRouter()
-
-  useEffect(() => {
-    if (user && !user.is_superuser) {
-      router.replace("/")
-    }
-  }, [user, router])
 
   const { data: response, isLoading } = useQuery({
     queryKey: ["users"],
     queryFn: () =>
       usersApi.listUsers({ throwOnError: true }).then((r) => r.data),
-    enabled: !!user?.is_superuser,
+    enabled: !!user,
   })
 
   const userList: UserTableData[] = (response?.data ?? []).map((u) => ({
     ...u,
     isCurrentUser: u.email === user?.email,
   }))
-
-  if (!user?.is_superuser) {
-    return null
-  }
 
   return (
     <div className="flex flex-col gap-4">
