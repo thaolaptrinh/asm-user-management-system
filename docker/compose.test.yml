@@ -33,6 +33,7 @@ services:
       # Source code - read-only (test only imports, never writes)
       - ../backend/app:/app/app:ro
       - ../backend/tests:/app/tests:ro
+      - ../backend/scripts:/app/scripts:ro
       # Coverage report output - write to host
       - ../backend/htmlcov:/app/htmlcov:rw
     environment:

@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 function extractErrorMessage(err: any): string {
-  const errDetail = err?.body?.detail
+  const errDetail = err?.detail || err?.body?.detail
   if (Array.isArray(errDetail) && errDetail.length > 0) {
     return errDetail[0].msg
   }

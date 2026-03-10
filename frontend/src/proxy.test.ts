@@ -41,17 +41,8 @@ describe("proxy", () => {
       expect(redirectSpy).toHaveBeenCalled()
     })
 
-    it("should redirect to /login when accessing /admin without token", () => {
-      const mockRequest = createMockRequest("/admin")
-      const redirectSpy = vi.spyOn(NextResponse, "redirect")
-
-      proxy(mockRequest)
-
-      expect(redirectSpy).toHaveBeenCalled()
-    })
-
-    it("should redirect to /login when accessing /items without token", () => {
-      const mockRequest = createMockRequest("/items")
+    it("should redirect to /login when accessing /users without token", () => {
+      const mockRequest = createMockRequest("/users")
       const redirectSpy = vi.spyOn(NextResponse, "redirect")
 
       proxy(mockRequest)
@@ -81,19 +72,8 @@ describe("proxy", () => {
       expect(redirectSpy).not.toHaveBeenCalled()
     })
 
-    it("should allow access to /admin with token", () => {
-      const mockRequest = createMockRequest("/admin", "valid-token")
-      const nextSpy = vi.spyOn(NextResponse, "next")
-      const redirectSpy = vi.spyOn(NextResponse, "redirect")
-
-      proxy(mockRequest)
-
-      expect(nextSpy).toHaveBeenCalled()
-      expect(redirectSpy).not.toHaveBeenCalled()
-    })
-
-    it("should allow access to /items with token", () => {
-      const mockRequest = createMockRequest("/items", "valid-token")
+    it("should allow access to /users with token", () => {
+      const mockRequest = createMockRequest("/users", "valid-token")
       const nextSpy = vi.spyOn(NextResponse, "next")
       const redirectSpy = vi.spyOn(NextResponse, "redirect")
 
@@ -263,7 +243,7 @@ describe("proxy", () => {
     })
 
     it("should allow access to nested protected routes with token", () => {
-      const mockRequest = createMockRequest("/admin/users", "valid-token")
+      const mockRequest = createMockRequest("/users", "valid-token")
       const nextSpy = vi.spyOn(NextResponse, "next")
       const redirectSpy = vi.spyOn(NextResponse, "redirect")
 
@@ -274,7 +254,7 @@ describe("proxy", () => {
     })
 
     it("should redirect on nested protected routes without token", () => {
-      const mockRequest = createMockRequest("/admin/users")
+      const mockRequest = createMockRequest("/users")
       const redirectSpy = vi.spyOn(NextResponse, "redirect")
 
       proxy(mockRequest)

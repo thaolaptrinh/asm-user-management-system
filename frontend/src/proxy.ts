@@ -10,12 +10,27 @@ export function proxy(request: NextRequest) {
   const hasValidToken = Boolean(token?.trim())
   const { pathname } = request.nextUrl
 
+  // Auth routes (where unauthenticated users go)
+  const isAuthRoute =
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    pathname === "/recover-password" ||
+    pathname === "/reset-password"
+
+  // Protected routes (require authentication)
   const isProtectedRoute =
     pathname === "/" ||
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/items") ||
+    pathname.startsWith("/users") ||
     pathname.startsWith("/settings")
 
+  // Redirect authenticated users away from auth routes
+  if (isAuthRoute && hasValidToken) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/"
+    return NextResponse.redirect(url)
+  }
+
+  // Redirect unauthenticated users to login for protected routes
   if (isProtectedRoute && !hasValidToken) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"

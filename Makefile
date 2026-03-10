@@ -161,10 +161,10 @@ test: ## Run all tests
 # Always builds first (Docker cache makes this ~2s when deps unchanged).
 # Source code is bind-mounted — changes reflected without rebuild.
 .PHONY: test-be
-test-be: ## Backend tests with coverage
+test-be: ## Backend tests with coverage (recreates database for clean slate)
 	$(DC_TEST) --profile $(DB_CONNECTION) up -d --wait $(DB_SERVICE)
 	$(DC_TEST) --profile $(DB_CONNECTION) run --build --rm --use-aliases backend \
-		sh -c "alembic upgrade head && python -m app.db.seed && pytest tests/ -v --cov=app --cov-report=term-missing"; \
+		sh -c "python scripts/drop_database.py && alembic upgrade head && python -m app.db.seed && pytest tests/ -v --cov=app --cov-report=term-missing"; \
 	EXIT=$$?; $(DC_TEST) down; exit $$EXIT
 
 .PHONY: test-be-reset
@@ -178,14 +178,20 @@ test-be-reset: ## Backend tests — destroy DB volume after run (fully clean sla
 test-fe: ## Frontend tests with coverage
 	$(DC_DEV) exec frontend bun run test:coverage
 
+.PHONY: seed-e2e
+seed-e2e: ## Seed E2E test data (deterministic users with TOTP)
+	$(DC_DEV) exec backend python -m app.db.seed_e2e_test_data
+
 .PHONY: test-e2e
-test-e2e: ## E2E tests - local dev (fast, base image with runtime install)
+test-e2e: ## E2E tests - local dev (seeds test data, then runs playwright)
 	$(DC_DEV) --profile e2e up -d --wait
+	$(DC_DEV) exec backend python -m app.db.seed_e2e_test_data
 	$(DC_DEV) --profile e2e run --rm playwright
 
 .PHONY: test-e2e-ci
 test-e2e-ci: ## E2E tests - CI/CD (deterministic, pre-built Docker image)
 	$(DC_TEST) --profile $(DB_CONNECTION) --profile e2e up -d --wait
+	$(DC_TEST) --profile $(DB_CONNECTION) exec backend python -m app.db.seed_e2e_test_data
 	$(DC_TEST) --profile e2e run --rm --build playwright; \
 	EXIT=$$?; $(DC_TEST) down; exit $$EXIT
 
