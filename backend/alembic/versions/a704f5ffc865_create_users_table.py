@@ -29,6 +29,7 @@ def upgrade() -> None:
         sa.Column("is_superuser", sa.Boolean(), nullable=False),
         sa.Column("full_name", sa.String(255), nullable=True),
         sa.Column("hashed_password", sa.String(255), nullable=False),
+        sa.Column("password_version", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),

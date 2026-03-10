@@ -7,7 +7,9 @@ from app.db.base import Base
 
 # Import all models so Alembic can detect them for autogenerate
 from app.models.user import User  # noqa: F401
-from app.models.item import Item  # noqa: F401
+from app.models.totp_secret import TotpSecret  # noqa: F401
+from app.models.totp_recovery_code import TotpRecoveryCode  # noqa: F401
+from app.models.audit_log import AuditLog  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
