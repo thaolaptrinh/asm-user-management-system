@@ -100,6 +100,8 @@ async def test_get_non_existing_user_as_superuser(client, superuser_token_header
 @pytest.mark.asyncio
 async def test_get_existing_user_current_user(client, session):
     """Test get own user."""
+    from app.core.security import create_access_token
+
     username = random_email()
     password = random_lower_string()
     user_repo = UserRepository(session)
@@ -109,12 +111,9 @@ async def test_get_existing_user_current_user(client, session):
         is_active=True,
         is_superuser=False,
     )
+    await session.flush()
 
-    login_data = {"username": username, "password": password}
-    login_response = await client.post(
-        f"{settings.API_V1_PREFIX}/auth/login", data=login_data
-    )
-    token = login_response.cookies["access_token"]
+    token = create_access_token(str(user.id))
     headers = {"Authorization": f"Bearer {token}"}
 
     response = await client.get(
@@ -127,10 +126,10 @@ async def test_get_existing_user_current_user(client, session):
 
 
 @pytest.mark.asyncio
-async def test_get_existing_user_permissions_error(
+async def test_get_existing_user_as_normal_user(
     client, normal_user_token_headers, session
 ):
-    """Test normal user cannot get other user details."""
+    """Test normal user can get other user details (Phase 1: no RBAC)."""
     user_repo = UserRepository(session)
     user = await user_repo.create(
         email=random_email(),
@@ -143,19 +142,19 @@ async def test_get_existing_user_permissions_error(
         f"{settings.API_V1_PREFIX}/users/{user.id}",
         headers=normal_user_token_headers,
     )
-    assert response.status_code == 403
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_get_non_existing_user_permissions_error(
+async def test_get_non_existing_user_as_normal_user(
     client, normal_user_token_headers
 ):
-    """Test normal user cannot access non-existing user."""
+    """Test normal user gets 404 for non-existing user (Phase 1: no RBAC)."""
     response = await client.get(
         f"{settings.API_V1_PREFIX}/users/{uuid.uuid4()}",
         headers=normal_user_token_headers,
     )
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -182,7 +181,7 @@ async def test_create_user_existing_email(client, superuser_token_headers, sessi
 
 @pytest.mark.asyncio
 async def test_create_user_by_normal_user(client, normal_user_token_headers):
-    """Test normal user cannot create user."""
+    """Test normal user can create user (Phase 1: no RBAC)."""
     username = random_email()
     password = random_lower_string()
     data = {"email": username, "password": password}
@@ -191,12 +190,12 @@ async def test_create_user_by_normal_user(client, normal_user_token_headers):
         headers=normal_user_token_headers,
         json=data,
     )
-    assert response.status_code == 403
+    assert response.status_code == 201
 
 
 @pytest.mark.asyncio
 async def test_retrieve_users(client, superuser_token_headers, session):
-    """Test list users as superuser."""
+    """Test list users as any authenticated user."""
     user_repo = UserRepository(session)
     await user_repo.create(
         email=random_email(),
@@ -222,6 +221,28 @@ async def test_retrieve_users(client, superuser_token_headers, session):
     assert "count" in all_users
     for item in all_users["data"]:
         assert "email" in item
+
+
+@pytest.mark.asyncio
+async def test_retrieve_users_as_normal_user(client, normal_user_token_headers, session):
+    """Test normal user can list users (Phase 1: no RBAC)."""
+    user_repo = UserRepository(session)
+    await user_repo.create(
+        email=random_email(),
+        hashed_password=hash_password(random_lower_string()),
+        is_active=True,
+        is_superuser=False,
+    )
+
+    response = await client.get(
+        f"{settings.API_V1_PREFIX}/users/",
+        headers=normal_user_token_headers,
+    )
+    all_users = response.json()
+
+    assert response.status_code == 200
+    assert "data" in all_users
+    assert "count" in all_users
 
 
 @pytest.mark.asyncio
@@ -363,12 +384,63 @@ async def test_delete_user_not_exists(client, superuser_token_headers):
 
 
 @pytest.mark.asyncio
-async def test_delete_user_cannot_delete_self(client, superuser_token_headers):
-    """Test superuser cannot delete own account via /me endpoint."""
-    # DELETE /me is not implemented - returns 422 (path validation error)
-    # The check exists in DELETE /{user_id} but requires UUID
+async def test_delete_user_invalid_path(client, superuser_token_headers):
+    """Test DELETE /users/me returns 422 (path validation error: 'me' is not a UUID)."""
     response = await client.delete(
         f"{settings.API_V1_PREFIX}/users/me",
         headers=superuser_token_headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_change_password_success(client, normal_user_token_headers):
+    """Test successful password change via API."""
+    response = await client.put(
+        f"{settings.API_V1_PREFIX}/users/me/password",
+        headers=normal_user_token_headers,
+        json={
+            "current_password": "testpassword123",
+            "new_password": "NewPassword456!"
+        }
+    )
+    assert response.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_change_password_unauthorized(client):
+    """Test change password without auth token returns 401."""
+    response = await client.put(
+        f"{settings.API_V1_PREFIX}/users/me/password",
+        json={
+            "current_password": "testpassword123",
+            "new_password": "NewPassword456!"
+        }
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_change_password_validation_errors(client, normal_user_token_headers):
+    """Test password validation."""
+    # Test password reuse
+    response = await client.put(
+        f"{settings.API_V1_PREFIX}/users/me/password",
+        headers=normal_user_token_headers,
+        json={
+            "current_password": "testpassword123",
+            "new_password": "testpassword123"
+        }
+    )
+    assert response.status_code == 422
+
+    # Test weak password
+    response = await client.put(
+        f"{settings.API_V1_PREFIX}/users/me/password",
+        headers=normal_user_token_headers,
+        json={
+            "current_password": "TestPassword123!",
+            "new_password": "password"
+        }
     )
     assert response.status_code == 422

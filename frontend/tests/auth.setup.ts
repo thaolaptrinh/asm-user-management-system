@@ -1,46 +1,37 @@
 import { test as setup } from "@playwright/test"
+import { testUsers } from "./fixtures/test-users"
 
 const authFile = "playwright/.auth/user.json"
 
 /**
- * Authenticate via browser: go to /login, submit form, then save storage state.
- * Playwright best practice: log in via the browser (like a real user), not via API/curl.
+ * Authenticate as admin (superuser) before all tests.
+ *
+ * Uses adminUser so that tests relying on stored auth can access admin pages.
+ * TOTP is handled via recovery code ADMN-1111 (first of 10 seeded codes).
+ * Remaining codes are reserved for tests that perform manual logins.
  */
 setup("authenticate", async ({ page }) => {
-  const email = process.env.FIRST_SUPERUSER
-  const password = process.env.FIRST_SUPERUSER_PASSWORD
-  if (!email || !password) {
-    throw new Error(
-      "Set FIRST_SUPERUSER and FIRST_SUPERUSER_PASSWORD (e.g. in .env or compose env_file)",
-    )
-  }
+  const { email, password, recoveryCodes } = testUsers.adminUser
+  const recoveryCode = recoveryCodes[0] // ADMN-1111
 
-  // Log any console errors
-  page.on("console", (msg) => {
-    if (msg.type() === "error") {
-      console.log(`Console error: ${msg.text()}`)
-    }
-  })
+  await page.goto("/login", { waitUntil: "networkidle" })
+  await page.waitForSelector("[data-testid='email-input']", { state: "visible" })
 
-  await page.goto("/login")
   await page.getByTestId("email-input").fill(email)
   await page.getByTestId("password-input").fill(password)
-
-  console.log(`Attempting login with: ${email}`)
-
   await page.getByRole("button", { name: "Log In" }).click()
 
-  // Wait for URL change to "/" (redirect after successful login)
-  console.log(`Waiting for redirect to /...`)
-  await page.waitForURL("/", { timeout: 15000 })
-  console.log(`Successfully redirected to: ${page.url()}`)
+  // Wait for TOTP verification step
+  await page.getByTestId("totp-code-input").waitFor({ state: "visible", timeout: 10_000 })
 
-  // Verify we're on the right page
-  await page
-    .getByRole("heading", { name: /Welcome back/ })
-    .waitFor({ state: "visible", timeout: 5000 })
+  // Switch to recovery code flow
+  await page.getByRole("button", { name: /use a recovery code instead/i }).click()
+  await page.getByTestId("recovery-code-input").fill(recoveryCode)
+  await page.getByRole("button", { name: "Use Recovery Code" }).click()
 
-  // Save auth state for other tests
+  // Verify dashboard reached
+  await page.waitForURL("/", { timeout: 15_000 })
+  await page.getByRole("heading", { name: /Welcome back/i }).waitFor({ state: "visible" })
+
   await page.context().storageState({ path: authFile })
-  console.log(`Auth state saved to: ${authFile}`)
 })

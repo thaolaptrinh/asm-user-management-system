@@ -16,7 +16,7 @@ from tests.utils.utils import random_email, random_lower_string
 
 @pytest.mark.asyncio
 async def test_get_access_token(client):
-    """Test login sets HttpOnly cookie and returns success message."""
+    """Test login returns temp_token in JSON body (step 1 of 2FA)."""
     login_data = {
         "username": settings.FIRST_SUPERUSER,
         "password": settings.FIRST_SUPERUSER_PASSWORD,
@@ -25,9 +25,12 @@ async def test_get_access_token(client):
         f"{settings.API_V1_PREFIX}/auth/login", data=login_data
     )
     assert response.status_code == 200
-    assert response.json() == {"message": "Login successful"}
-    assert "access_token" in response.cookies
-    assert response.cookies["access_token"]
+    data = response.json()
+    assert "temp_token" in data
+    assert data["temp_token"]
+    assert "message" in data
+    # Login no longer sets a cookie — access_token comes after TOTP verify
+    assert "access_token" not in response.cookies
 
 
 @pytest.mark.asyncio
@@ -172,7 +175,7 @@ async def test_reset_password_valid_token_user_deleted(client, session):
 
 @pytest.mark.asyncio
 async def test_login_with_bcrypt_password(client, session):
-    """Test that logging in with a bcrypt password hash works."""
+    """Test that logging in with a bcrypt password hash returns temp_token."""
     email = random_email()
     password = random_lower_string()
 
@@ -193,7 +196,7 @@ async def test_login_with_bcrypt_password(client, session):
         f"{settings.API_V1_PREFIX}/auth/login", data=login_data
     )
     assert response.status_code == 200
-    assert "access_token" in response.cookies
+    assert "temp_token" in response.json()
 
 
 @pytest.mark.asyncio
@@ -221,7 +224,7 @@ async def test_login_with_bcrypt_password_keeps_hash(client, session):
         f"{settings.API_V1_PREFIX}/auth/login", data=login_data
     )
     assert response.status_code == 200
-    assert "access_token" in response.cookies
+    assert "temp_token" in response.json()
 
     await session.refresh(user)
     assert user.hashed_password == original_hash

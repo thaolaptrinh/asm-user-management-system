@@ -1,10 +1,12 @@
 import { expect, type Page, test } from "@playwright/test"
-import { getTestUser } from "./config.ts"
 import { randomPassword } from "./utils/random.ts"
+import { testUsers } from "./fixtures/test-users.ts"
+import { logInUser, logOutUser } from "./utils/user.ts"
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
-const { email: testUserEmail, password: testUserPassword } = getTestUser()
+const testUserEmail = testUsers.standardUser.email
+const testUserPassword = testUsers.standardUser.password
 
 const fillForm = async (page: Page, email: string, password: string) => {
   await page.getByTestId("email-input").fill(email)
@@ -40,16 +42,7 @@ test("Forgot Password link is visible", async ({ page }) => {
 })
 
 test("Log in with valid email and password ", async ({ page }) => {
-  await page.goto("/login")
-
-  await fillForm(page, testUserEmail, testUserPassword)
-  await page.getByRole("button", { name: "Log In" }).click()
-
-  await page.waitForURL("/")
-
-  await expect(
-    page.getByRole("heading", { name: /Welcome back/ }),
-  ).toBeVisible()
+  await logInUser(page, testUserEmail, testUserPassword, testUsers.standardUser.recoveryCodes[0])
 })
 
 test("Log in with invalid email", async ({ page }) => {
@@ -72,37 +65,13 @@ test("Log in with invalid password", async ({ page }) => {
 })
 
 test("Successful log out", async ({ page }) => {
-  await page.goto("/login")
-
-  await fillForm(page, testUserEmail, testUserPassword)
-  await page.getByRole("button", { name: "Log In" }).click()
-
-  await page.waitForURL("/")
-
-  await expect(
-    page.getByRole("heading", { name: /Welcome back/ }),
-  ).toBeVisible()
-
-  await page.getByTestId("user-menu").click()
-  await page.getByRole("menuitem", { name: "Log out" }).click()
-  await page.waitForURL("/login")
+  await logInUser(page, testUserEmail, testUserPassword, testUsers.standardUser.recoveryCodes[1])
+  await logOutUser(page)
 })
 
 test("Logged-out user cannot access protected routes", async ({ page }) => {
-  await page.goto("/login")
-
-  await fillForm(page, testUserEmail, testUserPassword)
-  await page.getByRole("button", { name: "Log In" }).click()
-
-  await page.waitForURL("/")
-
-  await expect(
-    page.getByRole("heading", { name: /Welcome back/ }),
-  ).toBeVisible()
-
-  await page.getByTestId("user-menu").click()
-  await page.getByRole("menuitem", { name: "Log out" }).click()
-  await page.waitForURL("/login")
+  await logInUser(page, testUserEmail, testUserPassword, testUsers.standardUser.recoveryCodes[2])
+  await logOutUser(page)
 
   await page.goto("/settings")
   await page.waitForURL("/login")

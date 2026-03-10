@@ -5,6 +5,7 @@ Uses ASGITransport (in-process, no real HTTP socket) for fast endpoint testing.
 
 import uuid
 from collections.abc import AsyncGenerator
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
@@ -13,10 +14,16 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.core.config import settings
-from app.core.security import hash_password
+from app.core.security import create_access_token, create_temp_token, hash_password
 from app.db.session import get_session
 from app.main import app
+from app.models.totp_secret import TotpSecret
 from app.models.user import User
+from app.repositories.totp_secret import TotpSecretRepository
+from app.repositories.user import UserRepository
+from app.repositories.audit_log import AuditLogRepository
+from app.services.totp import TotpService
+from app.services.user import UserService
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -26,6 +33,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
     app.state.limiter.enabled = False
     from app.api.v1.routes.auth import limiter as auth_limiter
+
     auth_limiter.enabled = False
 
 
@@ -84,42 +92,171 @@ async def client(session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest_asyncio.fixture
-async def superuser_token_headers(client: AsyncClient) -> dict[str, str]:
-    """Authentication headers for the seeded superuser account."""
-    login_data = {
-        "username": settings.FIRST_SUPERUSER,
-        "password": settings.FIRST_SUPERUSER_PASSWORD,
-    }
-    response = await client.post(
-        f"{settings.API_V1_PREFIX}/auth/login", data=login_data
+async def superuser_token_headers(session: AsyncSession) -> dict[str, str]:
+    """Authentication headers for the seeded superuser account (token created directly)."""
+    from sqlalchemy import select
+
+    result = await session.execute(
+        select(User).where(User.email == settings.FIRST_SUPERUSER)
     )
-    # Login sets HttpOnly cookie; extract it for use as Bearer in tests
-    # (deps.py accepts both cookie and Bearer token)
-    token = response.cookies["access_token"]
+    user = result.scalar_one_or_none()
+    if user is None:
+        pytest.skip("Superuser not seeded in test DB")
+    token = create_access_token(str(user.id))
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest_asyncio.fixture
-async def normal_user_token_headers(
-    client: AsyncClient, session: AsyncSession
-) -> dict[str, str]:
-    """Authentication headers for a fresh normal user created per-test."""
-    email = f"test_{uuid.uuid4().hex[:8]}@example.com"
-    password = "testpassword123"
-
+async def normal_user_token_headers(session: AsyncSession) -> dict[str, str]:
+    """Authentication headers for a fresh normal user (token created directly)."""
     user = User(
         id=uuid.uuid4(),
-        email=email,
-        hashed_password=hash_password(password),
+        email=f"test_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("testpassword123"),
         is_active=True,
         is_superuser=False,
     )
     session.add(user)
-    await session.flush()  # write to DB within the test transaction, no real commit
-
-    login_data = {"username": email, "password": password}
-    response = await client.post(
-        f"{settings.API_V1_PREFIX}/auth/login", data=login_data
-    )
-    token = response.cookies["access_token"]
+    await session.flush()
+    token = create_access_token(str(user.id))
     return {"Authorization": f"Bearer {token}"}
+
+
+# TOTP Fixtures
+
+
+@pytest_asyncio.fixture
+async def totp_repo(session: AsyncSession) -> TotpSecretRepository:
+    """Create TOTP repository fixture."""
+    return TotpSecretRepository(session)
+
+
+@pytest_asyncio.fixture
+def totp_service(totp_repo: TotpSecretRepository) -> TotpService:
+    """Create TOTP service fixture."""
+    return TotpService(totp_repo)
+
+
+@pytest_asyncio.fixture
+async def sample_user_with_totp(session: AsyncSession) -> User:
+    """Create a sample user with TOTP enabled."""
+    user_id = uuid.uuid4()
+    user = User(
+        id=user_id,
+        email=f"totp_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+    )
+    session.add(user)
+    await session.flush()
+
+    totp = TotpSecret(
+        user_id=str(user_id),
+        secret="JBSWY3DPEHPK3PXP",
+        algorithm="SHA1",
+        digits=6,
+        period=30,
+        is_verified=True,
+        last_used_at=None,
+    )
+    session.add(totp)
+    await session.flush()
+
+    return user
+
+
+@pytest.fixture
+def valid_totp_code() -> str:
+    """Mock valid TOTP code for testing."""
+    return "123456"
+
+
+@pytest.fixture
+def mock_qr_code() -> str:
+    """Mock QR code base64 string for testing."""
+    return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+
+@pytest_asyncio.fixture
+async def totp_user_access_headers(session: AsyncSession) -> dict[str, str]:
+    """Access token headers for a user who has completed full TOTP login."""
+    user = User(
+        id=uuid.uuid4(),
+        email=f"totp_access_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+    )
+    session.add(user)
+    await session.flush()
+    totp = TotpSecret(
+        user_id=str(user.id),
+        secret="JBSWY3DPEHPK3PXP",
+        algorithm="SHA1",
+        digits=6,
+        period=30,
+        is_verified=True,
+        last_used_at=None,
+    )
+    session.add(totp)
+    await session.flush()
+    token = create_access_token(str(user.id))
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def totp_user_temp_headers(session: AsyncSession) -> dict[str, str]:
+    """Temp token headers simulating post-login state (before TOTP verify)."""
+    user = User(
+        id=uuid.uuid4(),
+        email=f"totp_temp_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+    )
+    session.add(user)
+    await session.flush()
+    token = create_temp_token(str(user.id))
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def audit_repo(session: AsyncSession) -> AuditLogRepository:
+    """Create AuditLog repository fixture."""
+    return AuditLogRepository(session)
+
+
+@pytest_asyncio.fixture
+def user_service(session: AsyncSession) -> UserService:
+    """Create UserService fixture."""
+    return UserService(UserRepository(session))
+
+
+@pytest_asyncio.fixture
+async def normal_user(session: AsyncSession) -> User:
+    """Create a normal user with TOTP enabled for testing password changes."""
+    user_id = uuid.uuid4()
+    user = User(
+        id=user_id,
+        email=f"normal_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("TestPassword123!"),
+        is_active=True,
+        is_superuser=False,
+    )
+    session.add(user)
+    await session.flush()
+
+    totp = TotpSecret(
+        user_id=str(user_id),
+        secret="JBSWY3DPEHPK3PXP",
+        algorithm="SHA1",
+        digits=6,
+        period=30,
+        is_verified=True,
+        last_used_at=None,
+    )
+    session.add(totp)
+    await session.flush()
+
+    return user
