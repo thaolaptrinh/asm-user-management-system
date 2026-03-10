@@ -21,9 +21,9 @@ Base URL: /api/v1
 | POST | /auth/totp/challenge | Tạo challenge (in-memory, có timeout) | Yes |
 | POST | /auth/totp/verify | Verify TOTP code | Yes |
 | **User** | | | |
-| GET | /users | Danh sách user | Yes (Admin) |
-| POST | /users | Tạo user mới | Yes (Admin) |
-| DELETE | /users/{id} | Xóa user | Yes (Admin) |
+| GET | /users | Danh sách user | Yes |
+| POST | /users | Tạo user mới | Yes |
+| DELETE | /users/{id} | Xóa user | Yes |
 | GET | /users/me | Thông tin user hiện tại | Yes |
 
 ---
@@ -274,7 +274,7 @@ _(Xem mục POST /auth/totp/verify ở trên — luồng B dùng challenge_id + 
 #### GET /users
 Lấy danh sách user (có phân trang). Chỉ trả về user chưa bị xóa (`deleted_at IS NULL`).
 
-**Auth:** Yes (Admin)
+**Auth:** Yes
 **Query:** ?page=1&limit=10
 
 **Response (200):**
@@ -297,9 +297,9 @@ Lấy danh sách user (có phân trang). Chỉ trả về user chưa bị xóa (
 ---
 
 #### POST /users
-Tạo user mới (Admin tạo cho user).
+Tạo user mới (bất kỳ user đã xác thực).
 
-**Auth:** Yes (Admin)
+**Auth:** Yes
 
 **Request:**
 \`\`\`json
@@ -326,7 +326,7 @@ Tạo user mới (Admin tạo cho user).
 #### DELETE /users/{id}
 Xóa user (soft delete: set `deleted_at`, không xóa row). User đã soft-deleted không xuất hiện trong GET /users.
 
-**Auth:** Yes (Admin)
+**Auth:** Yes
 
 **Response (204):** No Content
 
@@ -364,7 +364,7 @@ Phase 1 sử dụng JWT access token (không có refresh token):
 | Algorithm | HS256 (HMAC-SHA256) |
 | Secret Key | Environment variable (JWT_SECRET) |
 | Access Token Lifetime | 15 phút |
-| Temp Token Lifetime | 2 phút (sau POST /auth/login, dùng để verify TOTP) |
+| Temp Token Lifetime | 10 phút (sau POST /auth/login, dùng để verify TOTP + enrollment) |
 | Token Type | Bearer |
 | Storage | Stateless (không lưu database storage cho tokens) |
 
@@ -482,7 +482,7 @@ Phase 2 implements refresh token rotation:
 
 ## Overview
 
-Phase 2 bổ sung các endpoint sau để hoàn chỉnh hệ thống:
+Phase 2 bổ sung các endpoint sau và bổ sung RBAC (Super Admin vs User thường) cho các user endpoints.
 
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
@@ -590,6 +590,8 @@ User tự đổi mật khẩu.
 
 **Auth:** Yes
 
+**Rate Limit:** 3 requests per 15 minutes per user
+
 **Request:**
 \`\`\`json
 {
@@ -601,6 +603,15 @@ User tự đổi mật khẩu.
 **Response (204):** No Content
 
 **Error (401):** Current password incorrect
+**Error (422):** Validation error (weak password, password reuse, etc.)
+
+**Security:**
+- Verifies current password before change
+- Prevents password reuse (new must be different from current)
+- Minimum 8 characters
+- Increments `password_version` to invalidate all other sessions
+- Logs to audit log (PASSWORD_CHANGED / PASSWORD_CHANGE_FAILED)
+- Sends email notification on success
 
 ---
 
@@ -671,6 +682,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 |----------|---------|---------|
 | Endpoints | 12 | 17-20 |
 | Database Tables | 4 | 6 |
+| **RBAC (Role-Based Access Control)** | [X] No | [OK] Yes |
 | **JWT Access Token** | [OK] 15 phút | [OK] 10 phút |
 | **JWT Refresh Token** | [X] No | [OK] 30 ngày |
 | Token Expiry Handling | Login lại | Refresh token |

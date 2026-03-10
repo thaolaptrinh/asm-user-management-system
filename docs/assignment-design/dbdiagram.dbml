@@ -3,44 +3,53 @@ Project UsersManagement {
 }
 
 Table users {
-  id             char(36)     [pk, default: `UUID()`]
-  name           varchar(100) [not null]
-  email          varchar(255) [not null]
-  password_hash  varchar(255) [not null]
-  is_active      boolean      [not null, default: false]
-  is_super_admin boolean      [not null, default: false]
-  created_at     timestamp    [not null, default: `CURRENT_TIMESTAMP`]
-  updated_at     timestamp    [not null, default: `CURRENT_TIMESTAMP`]
-  deleted_at     timestamp    [null]
+  id              char(36)     [pk]
+  email           varchar(255) [not null]
+  full_name       varchar(255) [null]
+  hashed_password varchar(255) [not null]
+  is_active       boolean      [not null, default: false]
+  is_superuser    boolean      [not null, default: false]
+  created_at      datetime     [not null]
+  updated_at      datetime     [not null]
 
   indexes {
-    email      [unique, name: 'uq_users_email']
-    deleted_at [name: 'idx_users_deleted_at']
-    is_active  [name: 'idx_users_is_active']
+    email [unique, name: 'ix_users_email']
   }
 }
 
 Table totp_secrets {
-  user_id     char(36)    [pk, ref: > users.id]
-  secret      varchar(64) [not null, note: 'Base32 encoded secret']
-  algorithm   varchar(10) [not null, default: 'SHA1', note: 'SHA1/SHA256/SHA512']
-  digits      tinyint     [not null, default: 6, note: '6 or 8']
-  period      tinyint     [not null, default: 30, note: 'seconds']
-  is_verified boolean     [not null, default: false]
-  last_used_at timestamp  [null]
-  created_at  timestamp   [not null, default: `CURRENT_TIMESTAMP`]
-  updated_at  timestamp   [not null, default: `CURRENT_TIMESTAMP`]
+  user_id          char(36)    [pk, ref: > users.id]
+  secret           varchar(64) [not null, note: 'Base32 encoded secret']
+  algorithm        varchar(10) [not null, default: 'SHA1', note: 'SHA1/SHA256/SHA512']
+  digits           tinyint     [not null, default: 6, note: '6 or 8']
+  period           tinyint     [not null, default: 30, note: 'seconds']
+  is_verified      boolean     [not null, default: false]
+  last_used_at     timestamp   [null]
+  last_used_counter bigint     [null, note: 'Counter for replay attack prevention']
+  created_at       timestamp   [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at       timestamp   [not null, default: `CURRENT_TIMESTAMP`]
 }
 
 Table totp_recovery_codes {
-  user_id    char(36)  [not null, ref: > users.id]
-  code_hash  char(60)  [not null, note: 'bcrypt hashed recovery code']
-  used_at    timestamp [null, note: 'null = not used yet']
-  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  user_id    char(36)   [not null, ref: > users.id]
+  code_hash  char(60)   [not null, note: 'bcrypt hashed recovery code']
+  used_at    timestamp  [null, note: 'null = not used yet']
+  created_at timestamp  [not null, default: `CURRENT_TIMESTAMP`]
 
   indexes {
     (user_id, code_hash) [pk]
-    used_at  [name: 'idx_recovery_used_at']
+    used_at [name: 'idx_recovery_used_at']
+  }
+}
+
+Table password_reset_tokens {
+  user_id    char(36)     [pk, ref: > users.id]
+  token_hash varchar(255) [not null, note: 'SHA256 hash of reset token']
+  expires_at timestamp    [not null, note: 'Token expiration (30 minutes)']
+
+  indexes {
+    token_hash [name: 'idx_reset_token_hash']
+    expires_at [name: 'idx_reset_expires_at']
   }
 }
 

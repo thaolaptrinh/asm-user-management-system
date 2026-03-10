@@ -50,9 +50,9 @@ Người dùng chưa xác thực không thể thực hiện bất kỳ thao tác
 
 ### 2.3. Kiểm Soát Truy Cập
 
-Vấn đề:
-- Ai cũng xóa được ai -> mất kiểm soát
-- Không có admin -> không có người quản lý
+Phase 1: Theo đúng yêu cầu gốc — tất cả user xác thực có quyền như nhau, không phân biệt vai trò.
+
+Phase 2: Bổ sung RBAC (Role-Based Access Control) với Super Admin.
 
 ---
 
@@ -88,29 +88,21 @@ Vấn đề:
 | Blacklist | Check breached passwords |
 | Thay đổi định kỳ | Không yêu cầu |
 
-### 4.2. Phân Quyền
+### 4.2. Phân Quyền (Phase 1)
+
+Phase 1 không có RBAC — tất cả user đã xác thực có quyền như nhau:
 
 | Loại | Quyền User Management |
 |------|------------------------|
-| Super Admin | Tạo, xem, xóa tất cả |
-| User thường | Không truy cập |
+| Bất kỳ user xác thực | Xem, tạo, xóa bất kỳ user |
 
-### 4.3. Super Admin
-
-| Thành phần | Thiết kế |
-|------------|----------|
-| Khởi tạo | 1 account khi init (seed) |
-| Quyền | Xem, tạo, xóa bất kỳ user |
-| Hạn chế | Không xóa được chính mình |
-| Thêm mới | Không có UI |
-
-### 4.4. User Thường
+### 4.3. User (Phase 1)
 
 | Thành phần | Thiết kế |
 |------------|----------|
 | Đăng ký | Tự đăng ký công khai |
 | Đăng nhập | Email + Password + TOTP |
-| User Management | Không truy cập (403) |
+| User Management | Toàn quyền (xem, tạo, xóa) |
 | TOTP | Tự setup (3-step chuẩn), bắt buộc trước khi login |
 
 ---
@@ -149,34 +141,32 @@ Step 4: POST /auth/totp/verify Flow A (temp_token + totp_code mới) -> access_t
 ### 5.4. Truy Cập User Management
 
 ```
-User đăng nhập -> User Management ->
-+- Super Admin -> Cho phép
-+- User thường -> Từ chối (403)
+User đăng nhập -> User Management -> Cho phép (mọi user xác thực)
 ```
 
 ---
 
 ## 6. Tóm Tắt Quyền
 
-| Chức năng | Super Admin | User |
-|-----------|-------------|------|
+### Phase 1 (No RBAC)
+
+| Chức năng | Chưa xác thực | Đã xác thực |
+|-----------|---------------|-------------|
 | Đăng ký | Có | Có |
 | Đăng nhập | Có | Có |
-| Xem danh sách | Có | Không |
-| Tạo user | Có | Không |
-| Xóa user khác | Có | Không |
-| Xóa chính mình | Không | Có |
+| Xem danh sách | Không | Có |
+| Tạo user | Không | Có |
+| Xóa user | Không | Có |
+| Xem thông tin user | Không | Có |
 
 ---
 
 ## 7. Best Practices
 
-1. Không xóa user cuối cùng - Luôn giữ >=1 super admin
-2. Tách đăng ký và quản lý - Đăng ký công khai, quản lý chỉ admin
-3. 2FA bắt buộc - Tất cả user phải enroll + verify TOTP
-4. Soft delete - Phase 1 dùng soft delete: set deleted_at, không xóa row; GET /users chỉ trả về deleted_at IS NULL
-5. MFA 3-step chuẩn - enroll -> challenge -> verify (theo Supabase, Auth0, Okta)
-6. Challenge in-memory - Lưu trong memory/cache, không lưu DB, có timeout 60s
+1. 2FA bắt buộc - Tất cả user phải enroll + verify TOTP
+2. Soft delete - Phase 1 dùng soft delete: set deleted_at, không xóa row; GET /users chỉ trả về deleted_at IS NULL
+3. MFA 3-step chuẩn - enroll -> challenge -> verify (theo Supabase, Auth0, Okta)
+4. Challenge in-memory - Lưu trong memory/cache, không lưu DB, có timeout 60s
 
 ---
 
@@ -184,10 +174,42 @@ User đăng nhập -> User Management ->
 
 ## 8. Tính Năng Bổ Sung
 
-### 8.1. Đổi Mật Khẩu
+### 8.0. Role-Based Access Control (RBAC)
+
+Bổ sung phân quyền dựa trên vai trò:
+
+| Loại | Quyền User Management |
+|------|------------------------|
+| Super Admin | Tạo, xem, xóa bất kỳ user |
+| User thường | Chỉ xem/xóa chính mình |
+
+**Super Admin:**
+- 1 account khởi tạo khi init (seed)
+- Quyền xem, tạo, xóa bất kỳ user
+- Không tự xóa chính mình
+
+**Phase 2 Permission Table:**
+
+| Chức năng | Super Admin | User thường |
+|-----------|-------------|-------------|
+| Xem danh sách | Có | Không |
+| Tạo user | Có | Không |
+| Xóa user khác | Có | Không |
+| Xóa chính mình | Không | Có |
+
+### 8.1. Đổi Mật Khẩu ✅
 - User tự đổi password
 - Verify current password trước khi đổi
 - Bắt buộc theo Password Requirements
+- **Implemented:**
+  - Endpoint: `PUT /users/me/password`
+  - Rate limiting: 3 requests per 15 minutes per user
+  - Security:
+    - Prevents password reuse (new must be different from current)
+    - Increments `password_version` to invalidate all other sessions
+    - Logs to audit log (PASSWORD_CHANGED / PASSWORD_CHANGE_FAILED)
+    - Sends email notification on success
+    - Validates password strength (min 8 characters)
 
 ### 8.2. Quên Mật Khẩu
 - User request reset password qua email
@@ -228,7 +250,7 @@ User đăng nhập -> User Management ->
 | Login với 2FA | [OK] | [OK] |
 | TOTP Enrollment | [OK] | [OK] |
 | User Management | [OK] | [OK] |
-| Đổi Mật Khẩu | [X] | [OK] |
+| Đổi Mật Khẩu | [OK] | [OK] |
 | Quên Mật Khẩu | [X] | [OK] |
 | JWT Refresh Token | [X] | [OK] |
 | Rate Limiting | [X] | [OK] |

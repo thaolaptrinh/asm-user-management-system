@@ -25,7 +25,6 @@ src/
 ├── components/
 │   ├── admin/             # User management
 │   ├── dashboard/         # Sidebar, nav
-│   ├── items/             # Item CRUD
 │   ├── ui/                # shadcn/ui
 │   └── user-settings/     # Profile, password
 ├── hooks/                  # useAuth, useCustomToast
@@ -37,14 +36,7 @@ src/
 
 ## API Client
 
-Auto-generated from backend OpenAPI spec:
-
-```typescript
-import { items } from "@/client/sdk.gen"
-
-const { data } = await items.listItems({})
-await items.createItem({ body: { title: "Test" } })
-```
+Auto-generated from backend OpenAPI spec.
 
 **Regenerate** (from repo root):
 
@@ -68,7 +60,7 @@ const { user, login, logout } = useAuth()
 
 ## Components
 
-- **Feature:** `admin/`, `items/`, `user-settings/`
+- **Feature:** `admin/`, `user-settings/`
 - **UI:** `ui/` (shadcn/ui)
 - **Common:** `dashboard/sidebar/`, `common/`
 

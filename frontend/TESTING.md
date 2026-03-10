@@ -25,6 +25,16 @@ This project uses a **modern, advanced testing setup** inspired by [Next-js-Boil
 
 ---
 
+## Running Commands
+
+All test commands must be run **inside the frontend container**. Enter the shell first:
+
+```bash
+make shell-fe   # from the repo root
+```
+
+Then run any of the commands below.
+
 ## 📋 Commands
 
 ### **Unit Tests**
