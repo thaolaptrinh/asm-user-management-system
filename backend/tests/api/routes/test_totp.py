@@ -85,7 +85,7 @@ async def test_totp_enroll_already_active_returns_409(client, totp_user_access_h
     with patch(
         "app.services.totp.TotpService.create_totp_for_user",
         new_callable=AsyncMock,
-        side_effect=ConflictError("TOTP đã được kích hoạt"),
+        side_effect=ConflictError("TOTP is already enabled"),
     ):
         response = await client.post(
             f"{BASE}/enroll", headers=totp_user_access_headers
@@ -253,7 +253,7 @@ async def test_totp_verify_flow_a_wrong_code(client, session):
     with patch(
         "app.services.totp.TotpService.verify_totp_for_login",
         new_callable=AsyncMock,
-        side_effect=UnauthorizedError("Mã TOTP không hợp lệ"),
+        side_effect=UnauthorizedError("Invalid TOTP code"),
     ):
         response = await client.post(
             f"{BASE}/verify",
@@ -322,7 +322,7 @@ async def test_totp_verify_flow_b_wrong_code(client, totp_service, sample_user_w
     with patch(
         "app.services.totp.TotpService.verify_totp_for_enrollment",
         new_callable=AsyncMock,
-        side_effect=UnauthorizedError("Mã TOTP không hợp lệ"),
+        side_effect=UnauthorizedError("Invalid TOTP code"),
     ):
         response = await client.post(
             f"{BASE}/verify",

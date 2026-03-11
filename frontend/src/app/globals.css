@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Tailwind v4: dark mode theo class (next-themes thêm class "dark" vào html) */
+/* Tailwind v4: dark mode by class (next-themes adds class "dark" to html) */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
@@ -75,7 +75,7 @@
   --radius: 0.625rem;
 }
 
-/* Dark mode: override theme variables khi có class .dark (next-themes gắn lên html) */
+/* Dark mode: override theme variables when .dark class is present (next-themes adds to html) */
 @layer theme {
   .dark {
     --color-background: var(--color-dark-background);

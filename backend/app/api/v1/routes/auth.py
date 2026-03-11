@@ -43,7 +43,7 @@ async def login(
 @router.post("/logout", response_model=Message, operation_id="logout")
 async def logout(response: Response) -> Message:
     clear_auth_cookie(response)
-    return Message(message="Đăng xuất thành công")
+    return Message(message="Logout successful")
 
 
 @router.post(
@@ -65,7 +65,7 @@ async def register(
             full_name=user_data.full_name,
         )
     )
-    return Message(message="Đăng ký thành công. Vui lòng đăng nhập và kích hoạt TOTP.")
+    return Message(message="Registration successful. Please log in and enable TOTP.")
 
 
 @router.post(

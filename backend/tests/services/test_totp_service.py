@@ -161,7 +161,7 @@ async def test_get_totp_status_enabled(
     status = await totp_service.get_totp_status(str(sample_user_with_totp.id))
 
     assert status.is_enabled is True
-    assert "được kích hoạt" in status.message
+    assert "is enabled" in status.message
 
 
 @pytest.mark.asyncio
@@ -170,7 +170,7 @@ async def test_get_totp_status_disabled(totp_service: TotpService):
     status = await totp_service.get_totp_status("nonexistent-user-id")
 
     assert status.is_enabled is False
-    assert "chưa được kích hoạt" in status.message
+    assert "is not enabled" in status.message
 
 
 @pytest.mark.asyncio
@@ -202,7 +202,7 @@ async def test_create_totp_for_user_already_verified(
     totp_service: TotpService, sample_user_with_totp
 ):
     """Test creating TOTP when already verified (should fail)."""
-    with pytest.raises(ConflictError, match="TOTP đã được kích hoạt"):
+    with pytest.raises(ConflictError, match="TOTP is already enabled"):
         await totp_service.create_totp_for_user(
             str(sample_user_with_totp.id), sample_user_with_totp.email
         )
@@ -224,7 +224,7 @@ async def test_verify_totp_for_login_success(
 @pytest.mark.asyncio
 async def test_verify_totp_for_login_not_enabled(totp_service: TotpService):
     """Test TOTP verification for login when TOTP not enabled."""
-    with pytest.raises(UnauthorizedError, match="TOTP secret không tồn tại"):
+    with pytest.raises(UnauthorizedError, match="TOTP secret does not exist"):
         await totp_service.verify_totp_for_login("nonexistent-user-id", "123456")
 
 
@@ -240,7 +240,7 @@ async def test_verify_totp_for_login_replay_attack(
 
     # _find_accepted_counter returns the same counter that was already stored
     with patch.object(totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER):
-        with pytest.raises(UnauthorizedError, match="đã được sử dụng"):
+        with pytest.raises(UnauthorizedError, match="has been used"):
             await totp_service.verify_totp_for_login(
                 str(sample_user_with_totp.id), valid_totp_code
             )
@@ -258,7 +258,7 @@ async def test_verify_totp_for_login_replay_attack_adjacent_window(
         await totp_service._repo.session.flush()
 
     with patch.object(totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER - 1):
-        with pytest.raises(UnauthorizedError, match="đã được sử dụng"):
+        with pytest.raises(UnauthorizedError, match="has been used"):
             await totp_service.verify_totp_for_login(
                 str(sample_user_with_totp.id), valid_totp_code
             )
@@ -270,7 +270,7 @@ async def test_verify_totp_for_login_invalid_code(
 ):
     """Test TOTP verification with invalid code."""
     with patch.object(totp_service, "_find_accepted_counter", return_value=None):
-        with pytest.raises(UnauthorizedError, match="Mã TOTP không hợp lệ"):
+        with pytest.raises(UnauthorizedError, match="Invalid TOTP code"):
             await totp_service.verify_totp_for_login(
                 str(sample_user_with_totp.id), "000000"
             )
@@ -304,7 +304,7 @@ async def test_verify_totp_for_enrollment_success(
 @pytest.mark.asyncio
 async def test_verify_totp_for_enrollment_no_secret(totp_service: TotpService):
     """Test TOTP verification for enrollment without secret."""
-    with pytest.raises(UnauthorizedError, match="TOTP secret không tồn tại"):
+    with pytest.raises(UnauthorizedError, match="TOTP secret does not exist"):
         await totp_service.verify_totp_for_enrollment(
             "nonexistent-user-id", "123456"
         )
@@ -315,7 +315,7 @@ async def test_verify_totp_for_enrollment_already_verified(
     totp_service: TotpService, sample_user_with_totp, valid_totp_code
 ):
     """Test TOTP verification for enrollment when already verified."""
-    with pytest.raises(ConflictError, match="TOTP đã được kích hoạt"):
+    with pytest.raises(ConflictError, match="TOTP is already enabled"):
         await totp_service.verify_totp_for_enrollment(
             str(sample_user_with_totp.id), valid_totp_code
         )
@@ -333,7 +333,7 @@ async def test_verify_totp_for_enrollment_replay_attack(
         await totp_service._repo.session.flush()
 
     with patch.object(totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER):
-        with pytest.raises(UnauthorizedError, match="đã được sử dụng"):
+        with pytest.raises(UnauthorizedError, match="has been used"):
             await totp_service.verify_totp_for_enrollment(
                 str(sample_user_with_totp.id), valid_totp_code
             )
@@ -425,7 +425,7 @@ def test_resolve_challenge_returns_user_id(
 
 def test_resolve_challenge_raises_for_unknown_id(totp_service: TotpService):
     """Test resolve_challenge raises UnauthorizedError for unknown challenge_id."""
-    with pytest.raises(UnauthorizedError, match="Challenge không hợp lệ"):
+    with pytest.raises(UnauthorizedError, match="Invalid or expired challenge"):
         totp_service.resolve_challenge(str(uuid.uuid4()))
 
 
@@ -440,7 +440,7 @@ def test_resolve_challenge_raises_for_expired(
         "expires_at": datetime.now(timezone.utc) - timedelta(seconds=1),
     }
 
-    with pytest.raises(UnauthorizedError, match="Challenge không hợp lệ"):
+    with pytest.raises(UnauthorizedError, match="Invalid or expired challenge"):
         totp_service.resolve_challenge(challenge_id)
 
     _challenges.clear()

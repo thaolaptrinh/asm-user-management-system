@@ -108,7 +108,7 @@ export const LoginTempTokenResponseSchema = {
         message: {
             type: 'string',
             title: 'Message',
-            default: 'Vui lòng nhập mã TOTP'
+            default: 'Please enter TOTP code'
         }
     },
     type: 'object',
@@ -183,7 +183,7 @@ export const RecoveryCodesGenerateResponseSchema = {
         message: {
             type: 'string',
             title: 'Message',
-            default: 'Lưu các mã nở nơiày  an toàn - bạn sẽ không thể xem lại chúng'
+            default: 'Save these codes in a safe place - you will not be able to view them again'
         }
     },
     type: 'object',
@@ -389,7 +389,7 @@ export const TotpVerifyFlowBResponseSchema = {
             type: 'string',
             title: 'Message',
             description: 'Success message',
-            default: 'TOTP đã được kích hoạt'
+            default: 'TOTP is enabled'
         },
         is_enabled: {
             type: 'boolean',

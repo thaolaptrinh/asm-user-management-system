@@ -41,7 +41,7 @@ async def get_recovery_codes_status(
     remaining = await recovery_codes_service.get_remaining_count(str(current_user.id))
     return RecoveryCodesStatusResponse(
         remaining_count=remaining,
-        message=f"{remaining} mã còn lại",
+        message=f"{remaining} codes remaining",
     )
 
 
@@ -65,7 +65,7 @@ async def generate_recovery_codes(
     return RecoveryCodesGenerateResponse(
         codes=codes,
         remaining_count=remaining,
-        message="Lưu các mã này ở nơi an toàn - bạn sẽ không thể xem lại chúng",
+        message="Save these codes in a safe place - you will not be able to view them again",
     )
 
 
@@ -94,10 +94,10 @@ async def verify_recovery_code(
         try:
             payload = decode_access_token(body.temp_token)
             if payload.get("type") != "temp":
-                raise UnauthorizedError("Token không hợp lệ")
+                raise UnauthorizedError("Invalid token")
             user_id = str(payload["sub"])
         except Exception:
-            raise UnauthorizedError("Token không hợp lệ hoặc đã hết hạn")
+            raise UnauthorizedError("Invalid or expired token")
 
     if not user_id:
         raise UnauthorizedError("Temp token is required")
@@ -105,7 +105,7 @@ async def verify_recovery_code(
     is_valid = await recovery_codes_service.verify(user_id, body.code)
 
     if not is_valid:
-        raise UnauthorizedError("Mã khôi phục không hợp lệ hoặc đã được sử dụng")
+        raise UnauthorizedError("Invalid or already used recovery code")
 
     remaining = await recovery_codes_service.get_remaining_count(user_id)
     access_token = create_access_token(user_id)
@@ -113,5 +113,5 @@ async def verify_recovery_code(
     return RecoveryVerifyResponse(
         access_token=access_token,
         remaining_count=remaining,
-        message="Mã khôi phục hợp lệ",
+        message="Valid recovery code",
     )

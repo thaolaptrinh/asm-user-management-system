@@ -7,7 +7,7 @@ class LoginTempTokenResponse(BaseModel):
     """Response for POST /auth/login — step 1 of 2FA flow."""
 
     temp_token: str = Field(..., description="Short-lived token for TOTP verification")
-    message: str = Field(default="Vui lòng nhập mã TOTP")
+    message: str = Field(default="Please enter TOTP code")
 
 
 class TotpStatusResponse(BaseModel):
@@ -82,7 +82,7 @@ class TotpVerifyFlowBResponse(BaseModel):
     """Response for successful TOTP enrollment (Flow B — enroll confirm)"""
 
     message: str = Field(
-        default="TOTP đã được kích hoạt", description="Success message"
+        default="TOTP is enabled", description="Success message"
     )
     is_enabled: bool = Field(default=True, description="TOTP enabled status")
     recovery_codes: list[str] = Field(

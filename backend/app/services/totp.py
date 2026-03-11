@@ -86,7 +86,7 @@ class TotpService:
 
     async def get_totp_status(self, user_id: str) -> TotpStatusResponse:
         is_enabled = await self.is_totp_enabled(user_id)
-        message = "TOTP đã được kích hoạt" if is_enabled else "TOTP chưa được kích hoạt"
+        message = "TOTP is enabled" if is_enabled else "TOTP is not enabled"
         return TotpStatusResponse(is_enabled=is_enabled, message=message)
 
     async def create_totp_for_user(
@@ -95,7 +95,7 @@ class TotpService:
         existing = await self._repo.get_by_user_id(user_id)
 
         if existing and existing.is_verified:
-            raise ConflictError("TOTP đã được kích hoạt")
+            raise ConflictError("TOTP is already enabled")
 
         secret = self.generate_secret()
         qr_code = await self.generate_qr_code(secret, email)
@@ -145,13 +145,13 @@ class TotpService:
         totp_secret = await self._repo.get_by_user_id(user_id)
 
         if not totp_secret:
-            raise UnauthorizedError("TOTP secret không tồn tại")
+            raise UnauthorizedError("TOTP secret does not exist")
 
         if check_verified and not totp_secret.is_verified:
-            raise UnauthorizedError("TOTP chưa được kích hoạt")
+            raise UnauthorizedError("TOTP is not enabled")
 
         if mark_as_verified and totp_secret.is_verified:
-            raise ConflictError("TOTP đã được kích hoạt")
+            raise ConflictError("TOTP is already enabled")
 
         accepted_counter = self._find_accepted_counter(
             totp_secret.secret,
@@ -162,10 +162,10 @@ class TotpService:
         )
 
         if accepted_counter is None:
-            raise UnauthorizedError("Mã TOTP không hợp lệ")
+            raise UnauthorizedError("Invalid TOTP code")
 
         if await self._repo.check_last_used_counter(user_id, accepted_counter):
-            raise UnauthorizedError("Mã TOTP đã được sử dụng trong window hiện tại")
+            raise UnauthorizedError("TOTP code already used in current window")
 
         if mark_as_verified:
             await self._repo.mark_verified(user_id)
@@ -215,10 +215,10 @@ class TotpService:
 
         entry = _challenges.pop(str(challenge_id), None)
         if entry is None:
-            raise UnauthorizedError("Challenge không hợp lệ hoặc đã hết hạn")
+            raise UnauthorizedError("Invalid or expired challenge")
 
         if datetime.now(timezone.utc) > entry["expires_at"]:
-            raise UnauthorizedError("Challenge không hợp lệ hoặc đã hết hạn")
+            raise UnauthorizedError("Invalid or expired challenge")
 
         return entry["user_id"]
 

@@ -7,7 +7,7 @@ class RecoveryCodesGenerateResponse(BaseModel):
     )
     remaining_count: int = Field(..., description="Number of remaining unused codes")
     message: str = Field(
-        default="Lưu các mã nở nơiày  an toàn - bạn sẽ không thể xem lại chúng"
+        default="Save these codes in a safe place - you will not be able to view them again"
     )
 
 

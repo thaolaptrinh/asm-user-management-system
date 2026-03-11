@@ -105,10 +105,10 @@ async def _handle_flow_a(
     try:
         payload = decode_access_token(body.temp_token)  # type: ignore[arg-type]
         if payload.get("type") != "temp":
-            raise UnauthorizedError("Token không hợp lệ")
+            raise UnauthorizedError("Invalid token")
         user_id = str(payload["sub"])
     except (InvalidTokenError, KeyError):
-        raise UnauthorizedError("Token không hợp lệ hoặc đã hết hạn")
+        raise UnauthorizedError("Invalid or expired token")
 
     await totp_service.verify_totp_for_login(user_id, body.totp_code)
 
@@ -145,9 +145,9 @@ async def _handle_flow_b(
         try:
             payload = decode_access_token(body.temp_token)
             if payload.get("type") != "temp" or str(payload["sub"]) != user_id:
-                raise UnauthorizedError("Token không hợp lệ")
+                raise UnauthorizedError("Invalid token")
         except (InvalidTokenError, KeyError):
-            raise UnauthorizedError("Token không hợp lệ hoặc đã hết hạn")
+            raise UnauthorizedError("Invalid or expired token")
 
     await totp_service.verify_totp_for_enrollment(user_id, body.totp_code)
     recovery_codes = await recovery_codes_service.generate_for_user(user_id)
