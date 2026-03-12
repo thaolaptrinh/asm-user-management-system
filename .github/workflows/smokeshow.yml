@@ -18,9 +18,9 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install smokeshow
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
-          name: coverage-html
+          name: coverage-html-${{ github.event.workflow_run.head_sha }}
           path: backend/htmlcov
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}

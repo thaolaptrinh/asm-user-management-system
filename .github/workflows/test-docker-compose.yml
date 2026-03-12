@@ -16,11 +16,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - run: docker compose build
-      - run: docker compose down -v --remove-orphans
-      - run: docker compose up -d --wait backend frontend adminer
+      - run: cp .env.example .env
+      - name: Generate secrets for CI
+        run: |
+          sed -i "s|^APP_KEY=.*|APP_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')|" .env
+          sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=ci-db-password|" .env
+          sed -i "s|^DB_ROOT_PASSWORD=.*|DB_ROOT_PASSWORD=ci-root-password|" .env
+          sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')|" .env
+          sed -i "s|^FIRST_SUPERUSER_PASSWORD=.*|FIRST_SUPERUSER_PASSWORD=ci-superuser-pass|" .env
+      - run: make build
+      - run: docker compose -f docker/compose.dev.yml up -d --wait backend frontend
       - name: Test backend is up
         run: curl http://localhost:8000/api/v1/utils/health-check
       - name: Test frontend is up
         run: curl http://localhost:3000
-      - run: docker compose down -v --remove-orphans
+      - run: docker compose -f docker/compose.dev.yml down -v --remove-orphans
