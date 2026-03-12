@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # Application
     APP_NAME: str = "FastAPI App"
     APP_ENV: Literal["local", "staging", "production"] = "local"
-    APP_KEY: str
+    APP_KEY: str = ""
     APP_DEBUG: bool = False
     APP_URL: AnyHttpUrl = "http://localhost:8000"  # type: ignore[assignment]
     API_V1_PREFIX: str = "/api/v1"
@@ -25,12 +25,11 @@ class Settings(BaseSettings):
     DB_CONNECTION: Literal["mysql", "postgres"] = "mysql"
     DB_HOST: str = "localhost"
     DB_PORT: int = 3306
-    DB_DATABASE: str
-    DB_USERNAME: str
-    DB_PASSWORD: str
+    DB_DATABASE: str = "app"
+    DB_USERNAME: str = "appuser"
+    DB_PASSWORD: str = ""
 
     @computed_field
-    @property
     def DATABASE_URL(self) -> str:
         if self.DB_CONNECTION == "postgres":
             return (
@@ -43,7 +42,6 @@ class Settings(BaseSettings):
         )
 
     @computed_field
-    @property
     def DATABASE_URL_SYNC(self) -> str:
         if self.DB_CONNECTION == "postgres":
             return (
@@ -56,7 +54,7 @@ class Settings(BaseSettings):
         )
 
     # Authentication & Security
-    JWT_SECRET_KEY: str
+    JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
@@ -65,7 +63,6 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     CORS_ORIGINS_RAW: str = "http://localhost:3000"
 
-    @computed_field
     @property
     def CORS_ORIGINS(self) -> list[str]:
         if isinstance(self.CORS_ORIGINS_RAW, str):
@@ -76,14 +73,13 @@ class Settings(BaseSettings):
             ]
         return self.CORS_ORIGINS_RAW
 
-    @computed_field
     @property
     def all_cors_origins(self) -> list[str]:
         return list({self.FRONTEND_URL, *self.CORS_ORIGINS})
 
     # Superuser
     FIRST_SUPERUSER: EmailStr = "admin@example.com"  # type: ignore[assignment]
-    FIRST_SUPERUSER_PASSWORD: str
+    FIRST_SUPERUSER_PASSWORD: str = ""
 
     # Logging
     LOG_LEVEL: str = "debug"
@@ -104,17 +100,14 @@ class Settings(BaseSettings):
     MAIL_FROM_NAME: str = "App"
 
     @computed_field
-    @property
     def mail_enabled(self) -> bool:
         return self.MAIL_HOST is not None
 
     @computed_field
-    @property
     def is_production(self) -> bool:
         return self.APP_ENV == "production"
 
     @computed_field
-    @property
     def is_debug(self) -> bool:
         return self.APP_DEBUG
 
