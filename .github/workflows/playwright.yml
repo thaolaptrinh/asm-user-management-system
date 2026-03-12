@@ -63,7 +63,6 @@ jobs:
       working-directory: backend
     - run: bun ci
       working-directory: frontend
-    - run: bash scripts/generate-client.sh
     - name: Setup env for E2E tests
       run: |
         cp .env.example .env
@@ -73,6 +72,7 @@ jobs:
         sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')|" .env
         sed -i "s|^FIRST_SUPERUSER=.*|FIRST_SUPERUSER=admin@example.com|" .env
         sed -i "s|^FIRST_SUPERUSER_PASSWORD=.*|FIRST_SUPERUSER_PASSWORD=ci-superuser-pass|" .env
+    - run: bash scripts/generate-client.sh
     - run: docker compose -f docker/compose.dev.yml --profile e2e build
     - run: docker compose -f docker/compose.dev.yml --profile e2e down -v --remove-orphans
     - name: Run Playwright tests
