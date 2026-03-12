@@ -63,7 +63,7 @@ class UserService:
         # 1. Verify current password
         if not verify_password(data.current_password, user.hashed_password):
             if audit_repo:
-                await audit_repo.create(
+                await audit_repo.create_entry(
                     user_id=str(user.id),
                     action="PASSWORD_CHANGE_FAILED",
                     ip_address=ip_address,
@@ -76,7 +76,7 @@ class UserService:
         # 2. Check password reuse
         if verify_password(data.new_password, user.hashed_password):
             if audit_repo:
-                await audit_repo.create(
+                await audit_repo.create_entry(
                     user_id=str(user.id),
                     action="PASSWORD_CHANGE_FAILED",
                     ip_address=ip_address,
@@ -98,7 +98,7 @@ class UserService:
 
         # 4. Log successful password change
         if audit_repo:
-            await audit_repo.create(
+            await audit_repo.create_entry(
                 user_id=str(user.id),
                 action="PASSWORD_CHANGED",
                 ip_address=ip_address,
