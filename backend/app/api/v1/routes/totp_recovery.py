@@ -107,8 +107,13 @@ async def verify_recovery_code(
     if not is_valid:
         raise UnauthorizedError("Invalid or already used recovery code")
 
+    # Get user to fetch current password_version
+    user = await user_repo.get_by_id(uuid.UUID(user_id))
+    if user is None:
+        raise UnauthorizedError("User not found")
+
     remaining = await recovery_codes_service.get_remaining_count(user_id)
-    access_token = create_access_token(user_id)
+    access_token = create_access_token(user_id, user.password_version)
     set_auth_cookie(response, access_token)
     return RecoveryVerifyResponse(
         access_token=access_token,
