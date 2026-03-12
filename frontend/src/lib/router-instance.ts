@@ -1,6 +1,7 @@
 "use client"
 
 import type { useRouter } from "next/navigation"
+import { LOGIN_PATH } from "@/constants/auth"
 
 let routerInstance: ReturnType<typeof useRouter> | null = null
 
@@ -12,11 +13,11 @@ export function navigateToLogin() {
   if (typeof window === "undefined") return
 
   const currentPath = window.location.pathname
-  if (currentPath === "/login") return
+  if (currentPath === LOGIN_PATH) return
 
   if (routerInstance) {
-    routerInstance.replace("/login")
+    routerInstance.replace(LOGIN_PATH)
   } else {
-    window.location.replace("/login")
+    window.location.replace(LOGIN_PATH)
   }
 }
