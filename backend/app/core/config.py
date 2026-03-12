@@ -29,7 +29,6 @@ class Settings(BaseSettings):
     DB_USERNAME: str
     DB_PASSWORD: str
 
-    @computed_field
     @property
     def DATABASE_URL(self) -> str:
         if self.DB_CONNECTION == "postgres":
@@ -42,7 +41,6 @@ class Settings(BaseSettings):
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_DATABASE}"
         )
 
-    @computed_field
     @property
     def DATABASE_URL_SYNC(self) -> str:
         if self.DB_CONNECTION == "postgres":
@@ -65,7 +63,6 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     CORS_ORIGINS_RAW: str = "http://localhost:3000"
 
-    @computed_field
     @property
     def CORS_ORIGINS(self) -> list[str]:
         if isinstance(self.CORS_ORIGINS_RAW, str):
@@ -76,7 +73,6 @@ class Settings(BaseSettings):
             ]
         return self.CORS_ORIGINS_RAW
 
-    @computed_field
     @property
     def all_cors_origins(self) -> list[str]:
         return list({self.FRONTEND_URL, *self.CORS_ORIGINS})
@@ -103,17 +99,14 @@ class Settings(BaseSettings):
     MAIL_FROM_ADDRESS: EmailStr = "noreply@example.com"  # type: ignore[assignment]
     MAIL_FROM_NAME: str = "App"
 
-    @computed_field
     @property
     def mail_enabled(self) -> bool:
         return self.MAIL_HOST is not None
 
-    @computed_field
     @property
     def is_production(self) -> bool:
         return self.APP_ENV == "production"
 
-    @computed_field
     @property
     def is_debug(self) -> bool:
         return self.APP_DEBUG
@@ -121,7 +114,8 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    # Settings will be loaded from environment variables
+    return Settings.model_construct()
 
 
 settings: Settings = get_settings()

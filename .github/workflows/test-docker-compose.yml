@@ -13,14 +13,227 @@ jobs:
 
   test-docker-compose:
     runs-on: ubuntu-latest
+    env:
+      DB_DATABASE: app_test
+      DB_USERNAME: testuser
+      DB_PASSWORD: testpass123
+      DB_ROOT_PASSWORD: testrootpass123
+      DB_CONNECTION: mysql
+      DB_HOST: db-mysql
+      DB_PORT: 3306
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      FRONTEND_URL: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000
+      FIRST_SUPERUSER: admin@example.com
+      FIRST_SUPERUSER_PASSWORD: testpass123
+      RATE_LIMIT_ENABLED: "false"
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      LOG_LEVEL: debug
+      LOG_FORMAT: console
+      STACK_NAME: app
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - run: docker compose build
-      - run: docker compose down -v --remove-orphans
-      - run: docker compose up -d --wait backend frontend adminer
+
+      - name: Generate secrets
+        id: secrets
+        run: |
+          echo "APP_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" >> $GITHUB_OUTPUT
+          echo "JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" >> $GITHUB_OUTPUT
+
+      - name: Create .env file
+        run: |
+          cp .env.example .env
+          sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${{ env.DB_DATABASE }}|" .env
+          sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${{ env.DB_USERNAME }}|" .env
+          sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${{ env.DB_PASSWORD }}|" .env
+          sed -i "s|^DB_ROOT_PASSWORD=.*|DB_ROOT_PASSWORD=${{ env.DB_ROOT_PASSWORD }}|" .env
+          sed -i "s|^APP_KEY=.*|APP_KEY=${{ steps.secrets.outputs.APP_KEY }}|" .env
+          sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=${{ steps.secrets.outputs.JWT_SECRET_KEY }}|" .env
+          sed -i "s|^FIRST_SUPERUSER_PASSWORD=.*|FIRST_SUPERUSER_PASSWORD=${{ env.FIRST_SUPERUSER_PASSWORD }}|" .env
+          sed -i "s|^APP_ENV=.*|APP_ENV=${{ env.APP_ENV }}|" .env
+          sed -i "s|^APP_DEBUG=.*|APP_DEBUG=${{ env.APP_DEBUG }}|" .env
+          sed -i "s|^APP_URL=.*|APP_URL=${{ env.APP_URL }}|" .env
+          sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=${{ env.FRONTEND_URL }}|" .env
+          sed -i "s|^CORS_ORIGINS=.*|CORS_ORIGINS=${{ env.CORS_ORIGINS }}|" .env
+          
+          # Export to GITHUB_ENV for subsequent steps
+          {
+            echo "APP_KEY=${{ steps.secrets.outputs.APP_KEY }}"
+            echo "JWT_SECRET_KEY=${{ steps.secrets.outputs.JWT_SECRET_KEY }}"
+          } >> $GITHUB_ENV
+      
+      - name: Verify .env file
+        run: |
+          echo "=== .env file exists ==="
+          ls -la .env
+          echo "=== .env file contents (first 30 lines) ==="
+          cat .env | head -30
+          echo "=== Check docker compose configuration (without profile) ==="
+          docker compose \
+            -f docker/compose.base.yml \
+            -f docker/compose.dev.yml \
+            --env-file .env \
+            config --services 2>&1 | head -20
+          echo "=== Check docker compose configuration (with mysql profile) ==="
+          docker compose \
+            -f docker/compose.base.yml \
+            -f docker/compose.dev.yml \
+            --env-file .env \
+            --profile mysql \
+            config --services 2>&1 | head -20
+      
+      - name: Build Docker images
+        run: |
+          docker compose \
+            -f docker/compose.base.yml \
+            -f docker/compose.dev.yml \
+            --env-file .env \
+            --profile mysql \
+            build backend frontend
+      
+      - name: Start db-mysql first
+        run: |
+          # Set environment variables for docker compose
+          export APP_KEY="${{ steps.secrets.outputs.APP_KEY }}"
+          export JWT_SECRET_KEY="${{ steps.secrets.outputs.JWT_SECRET_KEY }}"
+          
+          docker compose \
+            -f docker/compose.base.yml \
+            -f docker/compose.dev.yml \
+            --env-file .env \
+            --profile mysql \
+            up -d db-mysql \
+          && echo "✅ MySQL started" \
+          && docker logs docker-db-mysql-1 --tail 20
+      
+      - name: Wait for MySQL to be healthy
+        run: |
+          echo "Waiting for MySQL to be healthy..."
+          for i in {1..60}; do
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' docker-db-mysql-1 2>/dev/null || echo "starting")
+            echo "Attempt $i/60: MySQL status = $STATUS"
+            if [ "$STATUS" = "healthy" ]; then
+              echo "✅ MySQL is healthy!"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "❌ MySQL failed to become healthy"
+          docker logs docker-db-mysql-1 --tail 50
+          exit 1
+      
+      - name: Start backend and frontend
+        run: |
+          # Set environment variables for docker compose
+          export APP_KEY="${{ steps.secrets.outputs.APP_KEY }}"
+          export JWT_SECRET_KEY="${{ steps.secrets.outputs.JWT_SECRET_KEY }}"
+          
+          docker compose \
+            -f docker/compose.base.yml \
+            -f docker/compose.dev.yml \
+            --env-file .env \
+            --profile mysql \
+            up -d backend frontend \
+          && echo "✅ Backend and frontend started"
+      
+      - name: Wait for prestart to complete
+        run: |
+          echo "Waiting for prestart to complete..."
+          for i in {1..60}; do
+            STATUS=$(docker inspect --format='{{.State.Status}}' docker-prestart-1 2>/dev/null || echo "unknown")
+            echo "Attempt $i/60: Prestart status = $STATUS"
+            if [ "$STATUS" = "exited" ]; then
+              EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' docker-prestart-1)
+              if [ "$EXIT_CODE" = "0" ]; then
+                echo "✅ Prestart completed successfully!"
+                exit 0
+              else
+                echo "❌ Prestart failed with exit code $EXIT_CODE"
+                docker logs docker-prestart-1 --tail 100
+                exit 1
+              fi
+            fi
+            sleep 2
+          done
+          echo "❌ Prestart timed out"
+          docker logs docker-prestart-1 --tail 100
+          exit 1
+      
+      - name: Check container status
+        run: |
+          echo "=== All containers status ==="
+          docker compose \
+            -f docker/compose.base.yml \
+            -f docker/compose.dev.yml \
+            --env-file .env \
+            --profile mysql \
+            ps
+          echo ""
+          echo "=== Prestart logs ==="
+          docker logs docker-prestart-1 2>&1 || true
+          echo ""
+          echo "=== MySQL logs (last 30) ==="
+          docker logs docker-db-mysql-1 --tail 30 || true
+          echo ""
+          echo "=== Backend logs (last 30) ==="
+          docker logs docker-backend-1 --tail 30 || true
+          echo ""
+          echo "=== Frontend logs (last 30) ==="
+          docker logs docker-frontend-1 --tail 30 || true
+
+      - name: Wait for MySQL to be healthy
+        run: |
+          echo "Waiting for MySQL to be healthy..."
+          for i in {1..60}; do
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' docker-db-mysql-1 2>/dev/null || echo "starting")
+            echo "Attempt $i/60: MySQL status = $STATUS"
+            if [ "$STATUS" = "healthy" ]; then
+              echo "✅ MySQL is healthy!"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "❌ MySQL failed to become healthy"
+          docker logs docker-db-mysql-1 --tail 50
+          exit 1
+
       - name: Test backend is up
-        run: curl http://localhost:8000/api/v1/utils/health-check
+        run: |
+          echo "Testing backend health check..."
+          curl --retry 10 --retry-delay 5 --retry-connrefused \
+            --fail-with-body \
+            http://localhost:8000/api/v1/utils/health-check
+
       - name: Test frontend is up
-        run: curl http://localhost:3000
-      - run: docker compose down -v --remove-orphans
+        run: |
+          echo "Testing frontend..."
+          curl --retry 10 --retry-delay 5 --retry-connrefused \
+            --fail-with-body \
+            http://localhost:3000
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Backend logs ==="
+          docker logs docker-backend-1 --tail 50 || true
+          echo ""
+          echo "=== Frontend logs ==="
+          docker logs docker-frontend-1 --tail 50 || true
+          echo ""
+          echo "=== Prestart logs ==="
+          docker logs docker-prestart-1 --tail 50 || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose \
+            -f docker/compose.base.yml \
+            -f docker/compose.dev.yml \
+            --profile mysql \
+            --project-directory . \
+            down -v --remove-orphans

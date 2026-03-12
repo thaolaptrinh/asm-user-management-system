@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import pyotp
-import qrcode
+import qrcode  # type: ignore[import]
 import asyncio
 
 from app.core.config import settings
@@ -194,7 +194,9 @@ class TotpService:
         self._purge_expired_challenges()
 
         challenge_id = uuid.uuid4()
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=CHALLENGE_TTL_SECONDS)
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            seconds=CHALLENGE_TTL_SECONDS
+        )
         _challenges[str(challenge_id)] = {
             "user_id": user_id,
             "expires_at": expires_at,
