@@ -6,11 +6,9 @@ import { useRouter } from "next/navigation"
 import { ThemeProvider } from "next-themes"
 import { useEffect, useState } from "react"
 import { Toaster } from "sonner"
-import {
-  setQueryClient,
-  setupUnauthorizedHandler,
-} from "@/lib/api-error-handler"
-import { setRouterInstance } from "@/lib/router-instance"
+import { auth } from "@/client/sdk.gen"
+import { setRouterInstance, navigateToLogin } from "@/lib/router-instance"
+import { setupUnauthorizedInterceptor, setQueryClient as setAuthQueryClient } from "@/lib/unauthorized-interceptor"
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -26,9 +24,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
-    setQueryClient(queryClient)
+    setAuthQueryClient(queryClient)
     setRouterInstance(router)
-    setupUnauthorizedHandler()
+
+    const logout = () => auth.logout({ throwOnError: false })
+    setupUnauthorizedInterceptor({
+      queryClient,
+      logout,
+      redirect: navigateToLogin,
+    })
   }, [queryClient, router])
 
   return (
