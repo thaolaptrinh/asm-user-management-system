@@ -116,7 +116,7 @@ async def _handle_flow_a(
     if user is None:
         raise UnauthorizedError("User not found")
 
-    access_token = create_access_token(user_id)
+    access_token = create_access_token(user_id, user.password_version)
     set_auth_cookie(response, access_token)
     return TotpVerifyFlowAResponse(
         access_token=access_token,
