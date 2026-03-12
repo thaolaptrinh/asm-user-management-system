@@ -87,9 +87,7 @@ async def test_totp_enroll_already_active_returns_409(client, totp_user_access_h
         new_callable=AsyncMock,
         side_effect=ConflictError("TOTP is already enabled"),
     ):
-        response = await client.post(
-            f"{BASE}/enroll", headers=totp_user_access_headers
-        )
+        response = await client.post(f"{BASE}/enroll", headers=totp_user_access_headers)
 
     assert response.status_code == 409
 
@@ -207,12 +205,13 @@ async def test_totp_verify_flow_a_access_token_rejected(client, session):
         hashed_password=hash_password("Password123"),
         is_active=True,
         is_superuser=False,
+        password_version=1,
     )
     session.add(user)
     await session.flush()
 
     # Access token (type="access") must not work as temp_token
-    access_token = create_access_token(str(user.id))
+    access_token = create_access_token(str(user.id), user.password_version)
     response = await client.post(
         f"{BASE}/verify",
         json={"temp_token": access_token, "totp_code": "123456"},
@@ -310,7 +309,9 @@ async def test_totp_verify_flow_b_expired_challenge(client):
 
 
 @pytest.mark.asyncio
-async def test_totp_verify_flow_b_wrong_code(client, totp_service, sample_user_with_totp):
+async def test_totp_verify_flow_b_wrong_code(
+    client, totp_service, sample_user_with_totp
+):
     """Flow B: valid challenge_id but wrong code returns 401."""
     totp = await totp_service._repo.get_by_user_id(str(sample_user_with_totp.id))
     if totp:
@@ -400,14 +401,17 @@ async def test_recovery_verify_success_sets_cookie(client, session):
 
     temp_token = create_temp_token(str(user.id))
 
-    with patch(
-        "app.services.recovery_codes.RecoveryCodesService.verify",
-        new_callable=AsyncMock,
-        return_value=True,
-    ), patch(
-        "app.services.recovery_codes.RecoveryCodesService.get_remaining_count",
-        new_callable=AsyncMock,
-        return_value=9,
+    with (
+        patch(
+            "app.services.recovery_codes.RecoveryCodesService.verify",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+        patch(
+            "app.services.recovery_codes.RecoveryCodesService.get_remaining_count",
+            new_callable=AsyncMock,
+            return_value=9,
+        ),
     ):
         response = await client.post(
             f"{RECOVERY_BASE}/verify",
@@ -470,3 +474,100 @@ async def test_recovery_status_requires_auth(client):
     """GET /auth/totp/recovery returns 401 without token."""
     response = await client.get(RECOVERY_BASE)
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_totp_verify_includes_password_version(client, session):
+    """TOTP verify endpoint returns access_token with password_version in payload."""
+    from app.core.security import hash_password, decode_access_token
+    from app.models.user import User
+    from app.models.totp_secret import TotpSecret
+
+    user = User(
+        id=uuid.uuid4(),
+        email=f"pwd_ver_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+        password_version=3,
+    )
+    session.add(user)
+    await session.flush()
+    totp = TotpSecret(
+        user_id=str(user.id),
+        secret="JBSWY3DPEHPK3PXP",
+        algorithm="SHA1",
+        digits=6,
+        period=30,
+        is_verified=True,
+        last_used_at=None,
+    )
+    session.add(totp)
+    await session.flush()
+
+    temp_token = create_temp_token(str(user.id))
+
+    with patch(
+        "app.services.totp.TotpService.verify_totp_for_login",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        response = await client.post(
+            f"{BASE}/verify",
+            json={"temp_token": temp_token, "totp_code": "123456"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    access_token = data["access_token"]
+
+    payload = decode_access_token(access_token)
+    assert payload["sub"] == str(user.id)
+    assert payload["password_version"] == 3
+    assert payload["type"] == "access"
+
+
+@pytest.mark.asyncio
+async def test_recovery_verify_includes_password_version(client, session):
+    """Recovery code verify endpoint returns access_token with password_version in payload."""
+    from app.core.security import hash_password, decode_access_token
+    from app.models.user import User
+
+    user = User(
+        id=uuid.uuid4(),
+        email=f"rec_pwd_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+        password_version=7,
+    )
+    session.add(user)
+    await session.flush()
+
+    temp_token = create_temp_token(str(user.id))
+
+    with (
+        patch(
+            "app.services.recovery_codes.RecoveryCodesService.verify",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+        patch(
+            "app.services.recovery_codes.RecoveryCodesService.get_remaining_count",
+            new_callable=AsyncMock,
+            return_value=9,
+        ),
+    ):
+        response = await client.post(
+            f"{RECOVERY_BASE}/verify",
+            json={"temp_token": temp_token, "code": "ABCD-1234"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    access_token = data["access_token"]
+
+    payload = decode_access_token(access_token)
+    assert payload["sub"] == str(user.id)
+    assert payload["password_version"] == 7
+    assert payload["type"] == "access"
