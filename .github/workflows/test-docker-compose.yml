@@ -30,4 +30,4 @@ jobs:
         run: curl http://localhost:8000/api/v1/utils/health-check
       - name: Test frontend is up
         run: curl http://localhost:3000
-      - run: docker compose --env-file .env -f docker/compose.base.yml -f docker/compose.dev.yml down -v --remove-orphans
+      - run: docker compose --env-file .env -f docker/compose.base.yml -f docker/compose.dev.yml --profile mysql down -v --remove-orphans
