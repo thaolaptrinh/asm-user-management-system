@@ -25,7 +25,9 @@ async def test_generate_secret(totp_service: TotpService):
 
 
 @pytest.mark.asyncio
-async def test_generate_qr_code(totp_service: TotpService, sample_user_with_totp, mock_qr_code):
+async def test_generate_qr_code(
+    totp_service: TotpService, sample_user_with_totp, mock_qr_code
+):
     """Test QR code generation with thread pool offloading."""
     secret = "JBSWY3DPEHPK3PXP"
     email = sample_user_with_totp.email
@@ -58,6 +60,7 @@ async def test_get_otpauth_url(totp_service: TotpService, sample_user_with_totp)
     assert secret in url
     # email may be URL-encoded in the otpauth URI
     from urllib.parse import unquote
+
     assert email in unquote(url)
 
 
@@ -65,6 +68,7 @@ async def test_get_otpauth_url(totp_service: TotpService, sample_user_with_totp)
 async def test_find_accepted_counter_valid(totp_service: TotpService):
     """Test _find_accepted_counter returns the matching counter for a valid code."""
     import pyotp as _pyotp
+
     secret = "JBSWY3DPEHPK3PXP"
     # Generate the actual current code for this secret
     totp_obj = _pyotp.TOTP(secret)
@@ -103,6 +107,7 @@ async def test_find_accepted_counter_invalid(totp_service: TotpService):
 async def test_find_accepted_counter_sha256(totp_service: TotpService):
     """Test _find_accepted_counter uses the correct digest for SHA256."""
     import hashlib
+
     with patch("app.services.totp.pyotp.TOTP") as mock_totp_class:
         mock_totp = MagicMock()
         mock_totp.at.return_value = "999999"  # Never matches
@@ -123,6 +128,7 @@ async def test_find_accepted_counter_sha256(totp_service: TotpService):
 async def test_find_accepted_counter_sha512(totp_service: TotpService):
     """Test _find_accepted_counter uses the correct digest for SHA512."""
     import hashlib
+
     with patch("app.services.totp.pyotp.TOTP") as mock_totp_class:
         mock_totp = MagicMock()
         mock_totp.at.return_value = "999999"
@@ -213,7 +219,9 @@ async def test_verify_totp_for_login_success(
     totp_service: TotpService, sample_user_with_totp, valid_totp_code
 ):
     """Test TOTP verification for login with valid code."""
-    with patch.object(totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER):
+    with patch.object(
+        totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER
+    ):
         result = await totp_service.verify_totp_for_login(
             str(sample_user_with_totp.id), valid_totp_code
         )
@@ -239,8 +247,10 @@ async def test_verify_totp_for_login_replay_attack(
         await totp_service._repo.session.flush()
 
     # _find_accepted_counter returns the same counter that was already stored
-    with patch.object(totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER):
-        with pytest.raises(UnauthorizedError, match="has been used"):
+    with patch.object(
+        totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER
+    ):
+        with pytest.raises(UnauthorizedError, match="already used in current window"):
             await totp_service.verify_totp_for_login(
                 str(sample_user_with_totp.id), valid_totp_code
             )
@@ -257,8 +267,10 @@ async def test_verify_totp_for_login_replay_attack_adjacent_window(
         totp.last_used_counter = _FAKE_COUNTER
         await totp_service._repo.session.flush()
 
-    with patch.object(totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER - 1):
-        with pytest.raises(UnauthorizedError, match="has been used"):
+    with patch.object(
+        totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER - 1
+    ):
+        with pytest.raises(UnauthorizedError, match="already used in current window"):
             await totp_service.verify_totp_for_login(
                 str(sample_user_with_totp.id), valid_totp_code
             )
@@ -287,7 +299,9 @@ async def test_verify_totp_for_enrollment_success(
         totp.is_verified = False
         await totp_service._repo.session.flush()
 
-    with patch.object(totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER):
+    with patch.object(
+        totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER
+    ):
         result = await totp_service.verify_totp_for_enrollment(
             str(sample_user_with_totp.id), valid_totp_code
         )
@@ -305,9 +319,7 @@ async def test_verify_totp_for_enrollment_success(
 async def test_verify_totp_for_enrollment_no_secret(totp_service: TotpService):
     """Test TOTP verification for enrollment without secret."""
     with pytest.raises(UnauthorizedError, match="TOTP secret does not exist"):
-        await totp_service.verify_totp_for_enrollment(
-            "nonexistent-user-id", "123456"
-        )
+        await totp_service.verify_totp_for_enrollment("nonexistent-user-id", "123456")
 
 
 @pytest.mark.asyncio
@@ -332,8 +344,10 @@ async def test_verify_totp_for_enrollment_replay_attack(
         totp.last_used_counter = _FAKE_COUNTER
         await totp_service._repo.session.flush()
 
-    with patch.object(totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER):
-        with pytest.raises(UnauthorizedError, match="has been used"):
+    with patch.object(
+        totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER
+    ):
+        with pytest.raises(UnauthorizedError, match="already used in current window"):
             await totp_service.verify_totp_for_enrollment(
                 str(sample_user_with_totp.id), valid_totp_code
             )
@@ -345,7 +359,9 @@ async def test_verify_totp_common_replay_check(
 ):
     """Test common replay attack prevention logic."""
     # Test with check_verified=True, mark_as_verified=False (login flow)
-    with patch.object(totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER):
+    with patch.object(
+        totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER
+    ):
         result = await totp_service._verify_totp_with_replay_check(
             user_id=str(sample_user_with_totp.id),
             totp_code=valid_totp_code,
@@ -361,7 +377,9 @@ async def test_verify_totp_common_replay_check(
         totp.last_used_counter = None  # reset so replay check doesn't block
         await totp_service._repo.session.flush()
 
-    with patch.object(totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER + 1):
+    with patch.object(
+        totp_service, "_find_accepted_counter", return_value=_FAKE_COUNTER + 1
+    ):
         result = await totp_service._verify_totp_with_replay_check(
             user_id=str(sample_user_with_totp.id),
             totp_code=valid_totp_code,
@@ -446,9 +464,7 @@ def test_resolve_challenge_raises_for_expired(
     _challenges.clear()
 
 
-def test_purge_expired_challenges(
-    totp_service: TotpService, sample_user_with_totp
-):
+def test_purge_expired_challenges(totp_service: TotpService, sample_user_with_totp):
     """Test _purge_expired_challenges removes only expired entries."""
     _challenges.clear()
     now = datetime.now(timezone.utc)
