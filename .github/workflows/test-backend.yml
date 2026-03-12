@@ -22,6 +22,11 @@ jobs:
           sed -i "s|^DB_ROOT_PASSWORD=.*|DB_ROOT_PASSWORD=ci-root-password|" .env
           sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')|" .env
           sed -i "s|^FIRST_SUPERUSER_PASSWORD=.*|FIRST_SUPERUSER_PASSWORD=ci-superuser-pass|" .env
+          # Set additional required env vars for CI
+          sed -i "s|^MAIL_HOST=.*|MAIL_HOST=mailpit|" .env
+          sed -i "s|# MAIL_HOST=mailpit|MAIL_HOST=mailpit|" .env
+          sed -i "s|^MAIL_FROM_ADDRESS=.*|MAIL_FROM_ADDRESS=test@example.com|" .env
+          sed -i "s|^MAIL_FROM_NAME=.*|MAIL_FROM_NAME=CI Test|" .env
 
       - name: Run backend tests
         run: make test-be
