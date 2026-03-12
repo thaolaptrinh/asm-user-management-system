@@ -45,7 +45,7 @@ jobs:
           echo "APP_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" >> $GITHUB_OUTPUT
           echo "JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" >> $GITHUB_OUTPUT
 
-      - name: Create .env for tests
+      - name: Create .env file
         run: |
           cp .env.example .env
           sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${{ env.DB_DATABASE }}|" .env
@@ -60,41 +60,91 @@ jobs:
           sed -i "s|^APP_URL=.*|APP_URL=${{ env.APP_URL }}|" .env
           sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=${{ env.FRONTEND_URL }}|" .env
           sed -i "s|^CORS_ORIGINS=.*|CORS_ORIGINS=${{ env.CORS_ORIGINS }}|" .env
-
+          
+          # Export to GITHUB_ENV for subsequent steps
+          {
+            echo "APP_KEY=${{ steps.secrets.outputs.APP_KEY }}"
+            echo "JWT_SECRET_KEY=${{ steps.secrets.outputs.JWT_SECRET_KEY }}"
+          } >> $GITHUB_ENV
+      
       - name: Verify .env file
         run: |
           echo "=== .env file exists ==="
           ls -la .env
           echo "=== .env file contents (first 30 lines) ==="
           cat .env | head -30
-          echo "=== Check docker compose configuration ==="
-          docker compose -f docker/compose.base.yml -f docker/compose.dev.yml config --services
-
+          echo "=== Check docker compose configuration (without profile) ==="
+          docker compose \
+            -f docker/compose.base.yml \
+            -f docker/compose.dev.yml \
+            --env-file .env \
+            config --services 2>&1 | head -20
+          echo "=== Check docker compose configuration (with mysql profile) ==="
+          docker compose \
+            -f docker/compose.base.yml \
+            -f docker/compose.dev.yml \
+            --env-file .env \
+            --profile mysql \
+            config --services 2>&1 | head -20
+      
       - name: Build Docker images
         run: |
           docker compose \
             -f docker/compose.base.yml \
             -f docker/compose.dev.yml \
+            --env-file .env \
             --profile mysql \
-            --project-directory . \
             build backend frontend
-
-      - name: Start services
+      
+      - name: Start db-mysql first
         run: |
           docker compose \
             -f docker/compose.base.yml \
             -f docker/compose.dev.yml \
+            --env-file .env \
             --profile mysql \
-            --project-directory . \
-            up -d backend frontend db-mysql
-
+            up -d db-mysql
+      
+      - name: Wait for MySQL to be healthy
+        run: |
+          echo "Waiting for MySQL to be healthy..."
+          for i in {1..60}; do
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' docker-db-mysql-1 2>/dev/null || echo "starting")
+            echo "Attempt $i/60: MySQL status = $STATUS"
+            if [ "$STATUS" = "healthy" ]; then
+              echo "✅ MySQL is healthy!"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "❌ MySQL failed to become healthy"
+          docker logs docker-db-mysql-1 --tail 50
+          exit 1
+      
+      - name: Start backend and frontend
+        run: |
+          docker compose \
+            -f docker/compose.base.yml \
+            -f docker/compose.dev.yml \
+            --env-file .env \
+            --profile mysql \
+            up -d backend frontend
+      
       - name: Check container status
         run: |
           echo "=== All containers status ==="
-          docker compose -f docker/compose.base.yml -f docker/compose.dev.yml --profile mysql ps
+          docker compose \
+            -f docker/compose.base.yml \
+            -f docker/compose.dev.yml \
+            --env-file .env \
+            --profile mysql \
+            ps
           echo ""
-          echo "=== MySQL container logs (last 30 lines) ==="
-          docker logs docker-db-mysql-1 --tail 30 || true
+          echo "=== Prestart container logs (last 30 lines) ==="
+          docker logs docker-prestart-1 --tail 30 || true
+          echo ""
+          echo "=== Backend container logs (last 30 lines) ==="
+          docker logs docker-backend-1 --tail 30 || true
 
       - name: Wait for MySQL to be healthy
         run: |
