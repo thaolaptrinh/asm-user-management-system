@@ -130,6 +130,29 @@ jobs:
             --profile mysql \
             up -d backend frontend
       
+      - name: Wait for prestart to complete
+        run: |
+          echo "Waiting for prestart to complete..."
+          for i in {1..60}; do
+            STATUS=$(docker inspect --format='{{.State.Status}}' docker-prestart-1 2>/dev/null || echo "unknown")
+            echo "Attempt $i/60: Prestart status = $STATUS"
+            if [ "$STATUS" = "exited" ]; then
+              EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' docker-prestart-1)
+              if [ "$EXIT_CODE" = "0" ]; then
+                echo "✅ Prestart completed successfully!"
+                exit 0
+              else
+                echo "❌ Prestart failed with exit code $EXIT_CODE"
+                docker logs docker-prestart-1 --tail 100
+                exit 1
+              fi
+            fi
+            sleep 2
+          done
+          echo "❌ Prestart timed out"
+          docker logs docker-prestart-1 --tail 100
+          exit 1
+      
       - name: Check container status
         run: |
           echo "=== All containers status ==="
@@ -140,11 +163,14 @@ jobs:
             --profile mysql \
             ps
           echo ""
-          echo "=== Prestart container logs (last 30 lines) ==="
-          docker logs docker-prestart-1 --tail 30 || true
+          echo "=== Prestart logs ==="
+          docker logs docker-prestart-1 || true
           echo ""
-          echo "=== Backend container logs (last 30 lines) ==="
-          docker logs docker-backend-1 --tail 30 || true
+          echo "=== MySQL logs ==="
+          docker logs docker-db-mysql-1 --tail 20 || true
+          echo ""
+          echo "=== Backend logs (if any) ==="
+          docker logs docker-backend-1 --tail 20 || true
 
       - name: Wait for MySQL to be healthy
         run: |
