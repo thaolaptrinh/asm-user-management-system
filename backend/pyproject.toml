@@ -72,6 +72,7 @@ cache_dir = "/tmp/pytest_cache"
 branch = true
 source = ["app"]
 omit = ["tests/*", "alembic/*"]
+data_file = "/tmp/.coverage"
 
 [tool.coverage.report]
 show_missing = true
