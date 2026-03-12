@@ -98,7 +98,7 @@ class UserService:
 
         # 4. Log successful password change
         if audit_repo:
-            await audit_repo.create(
+            await audit_repo.create_entry(
                 user_id=str(user.id),
                 action="PASSWORD_CHANGED",
                 ip_address=ip_address,
