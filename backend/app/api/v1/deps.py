@@ -120,10 +120,10 @@ async def get_current_user(token: TokenDep, user_repo: UserRepoDep) -> User:
     password_version_value = payload.get("password_version", 0)
     if isinstance(password_version_value, int):
         token_password_version = password_version_value
+    elif isinstance(password_version_value, str) and password_version_value.isdigit():
+        token_password_version = int(password_version_value)
     else:
-        token_password_version = (
-            int(password_version_value) if password_version_value else 0
-        )
+        token_password_version = 0
     if user.password_version != token_password_version:
         raise UnauthorizedError(
             "Your session has been invalidated. Please log in again."

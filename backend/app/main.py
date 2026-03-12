@@ -37,7 +37,12 @@ app.state.limiter = limiter
 async def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     from slowapi import _rate_limit_exceeded_handler
 
-    return await _rate_limit_exceeded_handler(request, exc)
+    response = await _rate_limit_exceeded_handler(request, exc)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=response.body,
+        headers=response.headers,
+    )
 
 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
