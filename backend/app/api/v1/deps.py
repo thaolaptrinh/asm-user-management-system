@@ -117,7 +117,12 @@ async def get_current_user(token: TokenDep, user_repo: UserRepoDep) -> User:
         raise UnauthorizedError("Account is inactive")
 
     # Validate password_version
-    token_password_version = int(payload.get("password_version", 0))
+    password_version_value = payload.get("password_version", 0)
+    token_password_version = (
+        int(password_version_value)
+        if isinstance(password_version_value, (int, str, float))
+        else 0
+    )
     if user.password_version != token_password_version:
         raise UnauthorizedError(
             "Your session has been invalidated. Please log in again."

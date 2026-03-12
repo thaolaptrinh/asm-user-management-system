@@ -34,17 +34,17 @@ jobs:
       LOG_LEVEL: debug
       LOG_FORMAT: console
       STACK_NAME: app
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      
+
       - name: Generate secrets
         id: secrets
         run: |
           echo "APP_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" >> $GITHUB_OUTPUT
           echo "JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" >> $GITHUB_OUTPUT
-      
+
       - name: Create .env for tests
         run: |
           cp .env.example .env
@@ -60,7 +60,7 @@ jobs:
           sed -i "s|^APP_URL=.*|APP_URL=${{ env.APP_URL }}|" .env
           sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=${{ env.FRONTEND_URL }}|" .env
           sed -i "s|^CORS_ORIGINS=.*|CORS_ORIGINS=${{ env.CORS_ORIGINS }}|" .env
-      
+
       - name: Verify .env file
         run: |
           echo "=== .env file exists ==="
@@ -69,7 +69,7 @@ jobs:
           cat .env | head -30
           echo "=== Check docker compose configuration ==="
           docker compose -f docker/compose.base.yml -f docker/compose.dev.yml config --services
-      
+
       - name: Build Docker images
         run: |
           docker compose \
@@ -78,7 +78,7 @@ jobs:
             --profile mysql \
             --project-directory . \
             build backend frontend
-      
+
       - name: Start services
         run: |
           docker compose \
@@ -87,7 +87,7 @@ jobs:
             --profile mysql \
             --project-directory . \
             up -d backend frontend db-mysql
-      
+
       - name: Check container status
         run: |
           echo "=== All containers status ==="
@@ -95,7 +95,7 @@ jobs:
           echo ""
           echo "=== MySQL container logs (last 30 lines) ==="
           docker logs docker-db-mysql-1 --tail 30 || true
-      
+
       - name: Wait for MySQL to be healthy
         run: |
           echo "Waiting for MySQL to be healthy..."
@@ -111,21 +111,21 @@ jobs:
           echo "❌ MySQL failed to become healthy"
           docker logs docker-db-mysql-1 --tail 50
           exit 1
-      
+
       - name: Test backend is up
         run: |
           echo "Testing backend health check..."
           curl --retry 10 --retry-delay 5 --retry-connrefused \
             --fail-with-body \
             http://localhost:8000/api/v1/utils/health-check
-      
+
       - name: Test frontend is up
         run: |
           echo "Testing frontend..."
           curl --retry 10 --retry-delay 5 --retry-connrefused \
             --fail-with-body \
             http://localhost:3000
-      
+
       - name: Show logs on failure
         if: failure()
         run: |
@@ -137,7 +137,7 @@ jobs:
           echo ""
           echo "=== Prestart logs ==="
           docker logs docker-prestart-1 --tail 50 || true
-      
+
       - name: Cleanup
         if: always()
         run: |
