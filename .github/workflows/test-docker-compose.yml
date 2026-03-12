@@ -98,12 +98,18 @@ jobs:
       
       - name: Start db-mysql first
         run: |
+          # Set environment variables for docker compose
+          export APP_KEY="${{ steps.secrets.outputs.APP_KEY }}"
+          export JWT_SECRET_KEY="${{ steps.secrets.outputs.JWT_SECRET_KEY }}"
+          
           docker compose \
             -f docker/compose.base.yml \
             -f docker/compose.dev.yml \
             --env-file .env \
             --profile mysql \
-            up -d db-mysql
+            up -d db-mysql \
+          && echo "✅ MySQL started" \
+          && docker logs docker-db-mysql-1 --tail 20
       
       - name: Wait for MySQL to be healthy
         run: |
@@ -123,12 +129,17 @@ jobs:
       
       - name: Start backend and frontend
         run: |
+          # Set environment variables for docker compose
+          export APP_KEY="${{ steps.secrets.outputs.APP_KEY }}"
+          export JWT_SECRET_KEY="${{ steps.secrets.outputs.JWT_SECRET_KEY }}"
+          
           docker compose \
             -f docker/compose.base.yml \
             -f docker/compose.dev.yml \
             --env-file .env \
             --profile mysql \
-            up -d backend frontend
+            up -d backend frontend \
+          && echo "✅ Backend and frontend started"
       
       - name: Wait for prestart to complete
         run: |
@@ -164,13 +175,16 @@ jobs:
             ps
           echo ""
           echo "=== Prestart logs ==="
-          docker logs docker-prestart-1 || true
+          docker logs docker-prestart-1 2>&1 || true
           echo ""
-          echo "=== MySQL logs ==="
-          docker logs docker-db-mysql-1 --tail 20 || true
+          echo "=== MySQL logs (last 30) ==="
+          docker logs docker-db-mysql-1 --tail 30 || true
           echo ""
-          echo "=== Backend logs (if any) ==="
-          docker logs docker-backend-1 --tail 20 || true
+          echo "=== Backend logs (last 30) ==="
+          docker logs docker-backend-1 --tail 30 || true
+          echo ""
+          echo "=== Frontend logs (last 30) ==="
+          docker logs docker-frontend-1 --tail 30 || true
 
       - name: Wait for MySQL to be healthy
         run: |
