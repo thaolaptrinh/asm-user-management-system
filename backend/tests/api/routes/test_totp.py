@@ -516,7 +516,7 @@ async def test_totp_verify_flow_a_missing_temp_token(client, session):
 
 
 @pytest.mark.asyncio
-async def test_totp_verify_totp_code_7_digits(client):
+async def test_totp_verify_totp_code_7_digits(client, session):
     """POST /auth/totp/verify with 7-digit totp_code should be rejected (schema allows 6-8 but service uses 6)."""
     from app.core.security import hash_password
     from app.models.user import User
@@ -560,7 +560,7 @@ async def test_totp_verify_totp_code_7_digits(client):
 
 
 @pytest.mark.asyncio
-async def test_totp_verify_totp_code_8_digits(client):
+async def test_totp_verify_totp_code_8_digits(client, session):
     """POST /auth/totp/verify with 8-digit totp_code should be rejected (schema allows 6-8 but service uses 6)."""
     from app.core.security import hash_password
     from app.models.user import User
