@@ -174,6 +174,47 @@ async def test_reset_password_valid_token_user_deleted(client, session):
 
 
 @pytest.mark.asyncio
+async def test_login_returns_temp_token_when_totp_enabled(client, session):
+    """Login returns temp_token even when user has TOTP enabled (no access_token cookie)."""
+    from app.models.totp_secret import TotpSecret
+
+    email = random_email()
+    password = random_lower_string()
+
+    user_repo = UserRepository(session)
+    user = await user_repo.create(
+        email=email,
+        hashed_password=hash_password(password),
+        is_active=True,
+        is_superuser=False,
+    )
+    await session.flush()
+
+    totp = TotpSecret(
+        user_id=str(user.id),
+        secret="JBSWY3DPEHPK3PXP",
+        algorithm="SHA1",
+        digits=6,
+        period=30,
+        is_verified=True,
+        last_used_at=None,
+    )
+    session.add(totp)
+    await session.flush()
+
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/auth/login",
+        data={"username": email, "password": password},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "temp_token" in data
+    assert data["temp_token"]
+    # access_token cookie must NOT be set at login stage — only after TOTP verify
+    assert "access_token" not in response.cookies
+
+
+@pytest.mark.asyncio
 async def test_login_with_bcrypt_password(client, session):
     """Test that logging in with a bcrypt password hash returns temp_token."""
     email = random_email()

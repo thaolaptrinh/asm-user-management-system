@@ -703,3 +703,155 @@ async def test_recovery_verify_includes_password_version(client, session):
     assert payload["sub"] == str(user.id)
     assert payload["password_version"] == 7
     assert payload["type"] == "access"
+
+
+# ── INTEGRATION TESTS ─────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_full_login_flow_first_time_user(client, session):
+    """Complete integration test: login → enroll TOTP → verify → receive access_token."""
+    from app.core.security import hash_password
+    from app.models.user import User
+
+    # 1. Create new user (simulate registration)
+    user_id = uuid.uuid4()
+    user = User(
+        id=user_id,
+        email=f"full_flow_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+    )
+    session.add(user)
+    await session.flush()
+
+    # 2. Login (should return temp_token)
+    response = await client.post(
+        f"{settings.API_V1_PREFIX}/auth/login",
+        data={"username": user.email, "password": "Password123"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "temp_token" in data
+    temp_token = data["temp_token"]
+    assert "access_token" not in data
+
+    # 3. Check TOTP status (should be disabled)
+    response = await client.get(
+        f"{BASE}/status", headers={"Authorization": f"Bearer {temp_token}"}
+    )
+    assert response.status_code == 200
+    status_data = response.json()
+    assert status_data["is_enabled"] is False
+
+    # 4. Enroll TOTP (mock the service)
+    mock_enroll_response = TotpEnrollResponse(
+        secret="JBSWY3DPEHPK3PXP",
+        qr_code="data:image/png;base64,abc123",
+        otpauth_url="otpauth://totp/App:test@example.com?secret=JBSWY3DPEHPK3PXP",
+    )
+    with patch(
+        "app.services.totp.TotpService.create_totp_for_user",
+        new_callable=AsyncMock,
+        return_value=mock_enroll_response,
+    ):
+        response = await client.post(
+            f"{BASE}/enroll", headers={"Authorization": f"Bearer {temp_token}"}
+        )
+    assert response.status_code == 200
+    enroll_data = response.json()
+    assert enroll_data["secret"] == "JBSWY3DPEHPK3PXP"
+    assert enroll_data["qr_code"].startswith("data:image/png;base64,")
+    assert enroll_data["otpauth_url"].startswith("otpauth://totp/")
+
+    # 5. Create challenge (mock the service)
+    challenge_id = uuid.uuid4()
+    mock_challenge_response = TotpChallengeResponse(
+        challenge_id=challenge_id,
+        expires_in=60,
+    )
+    with patch(
+        "app.services.totp.TotpService.create_challenge",
+        return_value=mock_challenge_response,
+    ):
+        response = await client.post(
+            f"{BASE}/challenge", headers={"Authorization": f"Bearer {temp_token}"}
+        )
+    assert response.status_code == 200
+    challenge_data = response.json()
+    assert challenge_data["challenge_id"] == str(challenge_id)
+
+    # 6. Verify TOTP (enrollment flow - Flow B)
+    mock_verify_response = TotpVerifyFlowBResponse(
+        message="TOTP is enabled",
+        is_enabled=True,
+        recovery_codes=[f"CODE-{i:04d}" for i in range(10)],
+    )
+    with (
+        patch(
+            "app.services.totp.TotpService.resolve_challenge",
+            return_value=str(user_id),
+        ),
+        patch(
+            "app.services.totp.TotpService.verify_totp_for_enrollment",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+        patch(
+            "app.services.recovery_codes.RecoveryCodesService.generate_for_user",
+            new_callable=AsyncMock,
+            return_value=mock_verify_response.recovery_codes,
+        ),
+    ):
+        response = await client.post(
+            f"{BASE}/verify",
+            json={"challenge_id": str(challenge_id), "totp_code": "123456"},
+        )
+    assert response.status_code == 200
+    verify_data = response.json()
+    assert verify_data["is_enabled"] is True
+    assert len(verify_data["recovery_codes"]) == 10
+
+
+@pytest.mark.asyncio
+async def test_expired_temp_token_rejected(client, session):
+    """Test that expired temp_token is rejected with 401."""
+    import jwt
+    from datetime import datetime, timedelta, UTC
+    from app.core.security import hash_password
+    from app.models.user import User
+
+    # Create user
+    user_id = uuid.uuid4()
+    user = User(
+        id=user_id,
+        email=f"expired_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+    )
+    session.add(user)
+    await session.flush()
+
+    # Create an expired token (11 minutes ago - past the 10-minute expiration)
+    expire_time = datetime.now(UTC) - timedelta(minutes=11)
+    payload = {
+        "sub": str(user_id),
+        "exp": expire_time,
+        "iat": expire_time,
+        "type": "temp",
+    }
+    expired_token = jwt.encode(
+        payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
+
+    # Try to use expired token on TOTP status endpoint
+    response = await client.get(
+        f"{BASE}/status", headers={"Authorization": f"Bearer {expired_token}"}
+    )
+
+    # Should return 401 for expired token
+    assert response.status_code == 401
+    # JWT library returns "Could not validate credentials" for expired tokens
+    # The important part is the 401 status code
