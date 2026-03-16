@@ -631,21 +631,17 @@ async def test_totp_verify_flow_b_replay_attack(
         )
         assert response1.status_code == 200
 
-    # Mock second request to fail with replay attack error
-    with patch(
-        "app.services.totp.TotpService.verify_totp_for_enrollment",
-        new_callable=AsyncMock,
-        side_effect=UnauthorizedError("TOTP code already used in current window"),
-    ):
-        response2 = await client.post(
-            f"{BASE}/verify",
-            json={
-                "challenge_id": str(challenge_resp.challenge_id),
-                "totp_code": "123456",
-            },
-        )
-        assert response2.status_code == 401
-        assert response2.json()["detail"] == "TOTP code already used in current window"
+    # Second request with same challenge_id will fail because challenge was consumed
+    # The challenge gets resolved and consumed in _handle_flow_b before verify_totp_for_enrollment
+    response2 = await client.post(
+        f"{BASE}/verify",
+        json={
+            "challenge_id": str(challenge_resp.challenge_id),
+            "totp_code": "123456",
+        },
+    )
+    assert response2.status_code == 401
+    assert response2.json()["detail"] == "Invalid or expired challenge"
 
 
 # ── Request validation ────────────────────────────────────────────────────────
