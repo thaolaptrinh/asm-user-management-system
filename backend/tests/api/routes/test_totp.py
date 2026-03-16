@@ -374,6 +374,100 @@ async def test_totp_verify_flow_b_wrong_code(
     assert response.status_code == 401
 
 
+@pytest.mark.asyncio
+async def test_totp_verify_flow_a_user_not_found(client, session):
+    """Flow A: temp_token valid but user not found returns 401."""
+    from app.core.security import create_temp_token
+
+    # Create temp_token for non-existent user
+    fake_user_id = str(uuid.uuid4())
+    temp_token = create_temp_token(fake_user_id)
+
+    with patch(
+        "app.services.totp.TotpService.verify_totp_for_login",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        response = await client.post(
+            f"{BASE}/verify",
+            json={"temp_token": temp_token, "totp_code": "123456"},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "User not found"
+
+
+@pytest.mark.asyncio
+async def test_totp_verify_flow_b_temp_token_mismatch(
+    client, totp_service, sample_user_with_totp
+):
+    """Flow B: challenge_id + temp_token with mismatched user_id returns 401."""
+    # Make TOTP unverified so enrollment verify works
+    totp = await totp_service._repo.get_by_user_id(str(sample_user_with_totp.id))
+    if totp:
+        totp.is_verified = False
+        await totp_service._repo.session.flush()
+
+    challenge_resp = totp_service.create_challenge(str(sample_user_with_totp.id))
+
+    # Create temp_token for DIFFERENT user
+    from app.core.security import create_temp_token
+
+    different_user_id = str(uuid.uuid4())
+    temp_token = create_temp_token(different_user_id)
+
+    with patch(
+        "app.services.totp.TotpService.verify_totp_for_enrollment",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        response = await client.post(
+            f"{BASE}/verify",
+            json={
+                "challenge_id": str(challenge_resp.challenge_id),
+                "temp_token": temp_token,
+                "totp_code": "123456",
+            },
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid token"
+
+
+@pytest.mark.asyncio
+async def test_totp_verify_flow_b_invalid_temp_token(
+    client, totp_service, sample_user_with_totp
+):
+    """Flow B: challenge_id + invalid temp_token format returns 401."""
+    # Make TOTP unverified so enrollment verify works
+    totp = await totp_service._repo.get_by_user_id(str(sample_user_with_totp.id))
+    if totp:
+        totp.is_verified = False
+        await totp_service._repo.session.flush()
+
+    challenge_resp = totp_service.create_challenge(str(sample_user_with_totp.id))
+
+    # Use invalid temp_token format (not a valid JWT)
+    invalid_temp_token = "not.a.valid.jwt.token"
+
+    with patch(
+        "app.services.totp.TotpService.verify_totp_for_enrollment",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        response = await client.post(
+            f"{BASE}/verify",
+            json={
+                "challenge_id": str(challenge_resp.challenge_id),
+                "temp_token": invalid_temp_token,
+                "totp_code": "123456",
+            },
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or expired token"
+
+
 # ── Request validation ────────────────────────────────────────────────────────
 
 
