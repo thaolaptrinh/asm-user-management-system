@@ -259,7 +259,7 @@ async def test_totp_verify_flow_a_access_token_rejected(client, session):
 
 @pytest.mark.asyncio
 async def test_totp_verify_flow_a_wrong_code(client, session):
-    """Flow A: valid temp_token but wrong TOTP code returns 401."""
+    """Flow A: valid temp_token but wrong TOTP code returns 401 with exact message."""
     from app.core.security import hash_password
     from app.models.user import User
     from app.models.totp_secret import TotpSecret
@@ -298,6 +298,7 @@ async def test_totp_verify_flow_a_wrong_code(client, session):
         )
 
     assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid TOTP code"
 
 
 # ── POST /auth/totp/verify — Flow B ──────────────────────────────────────────
@@ -372,6 +373,279 @@ async def test_totp_verify_flow_b_wrong_code(
         )
 
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_totp_verify_flow_a_expired_otp(client, session):
+    """Flow A: OTP code outside valid time window returns 401."""
+    from app.core.security import hash_password
+    from app.models.user import User
+    from app.models.totp_secret import TotpSecret
+
+    user = User(
+        id=uuid.uuid4(),
+        email=f"flow_a_expired_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+    )
+    session.add(user)
+    await session.flush()
+    totp = TotpSecret(
+        user_id=str(user.id),
+        secret="JBSWY3DPEHPK3PXP",
+        algorithm="SHA1",
+        digits=6,
+        period=30,
+        is_verified=True,
+        last_used_at=None,
+    )
+    session.add(totp)
+    await session.flush()
+
+    temp_token = create_temp_token(str(user.id))
+
+    # Use OTP code that is far outside the valid time window
+    # This will cause _find_accepted_counter to return None
+    with patch(
+        "app.services.totp.TotpService._find_accepted_counter",
+        return_value=None,
+    ):
+        response = await client.post(
+            f"{BASE}/verify",
+            json={"temp_token": temp_token, "totp_code": "999999"},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid TOTP code"
+
+
+@pytest.mark.asyncio
+async def test_totp_verify_flow_a_replay_attack_api_level(client, session):
+    """Flow A: Using same OTP code twice returns 401 on second request (API level)."""
+    from app.core.security import hash_password
+    from app.models.user import User
+    from app.models.totp_secret import TotpSecret
+    from unittest.mock import AsyncMock, patch
+
+    user = User(
+        id=uuid.uuid4(),
+        email=f"flow_a_replay_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+    )
+    session.add(user)
+    await session.flush()
+    totp = TotpSecret(
+        user_id=str(user.id),
+        secret="JBSWY3DPEHPK3PXP",
+        algorithm="SHA1",
+        digits=6,
+        period=30,
+        is_verified=True,
+        last_used_at=None,
+        last_used_counter=None,
+    )
+    session.add(totp)
+    await session.flush()
+
+    temp_token = create_temp_token(str(user.id))
+
+    # Mock first request to succeed
+    with patch(
+        "app.services.totp.TotpService.verify_totp_for_login",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        response1 = await client.post(
+            f"{BASE}/verify",
+            json={"temp_token": temp_token, "totp_code": "123456"},
+        )
+        assert response1.status_code == 200
+
+    # Mock second request to fail with replay attack error
+    with patch(
+        "app.services.totp.TotpService.verify_totp_for_login",
+        new_callable=AsyncMock,
+        side_effect=UnauthorizedError("TOTP code already used in current window"),
+    ):
+        response2 = await client.post(
+            f"{BASE}/verify",
+            json={"temp_token": temp_token, "totp_code": "123456"},
+        )
+        assert response2.status_code == 401
+        assert response2.json()["detail"] == "TOTP code already used in current window"
+
+
+@pytest.mark.asyncio
+async def test_totp_verify_flow_a_missing_temp_token(client, session):
+    """Flow A: Request without temp_token (only totp_code) returns 422."""
+    from app.core.security import hash_password
+    from app.models.user import User
+    from app.models.totp_secret import TotpSecret
+
+    user = User(
+        id=uuid.uuid4(),
+        email=f"flow_a_no_temp_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+    )
+    session.add(user)
+    await session.flush()
+    totp = TotpSecret(
+        user_id=str(user.id),
+        secret="JBSWY3DPEHPK3PXP",
+        algorithm="SHA1",
+        digits=6,
+        period=30,
+        is_verified=True,
+        last_used_at=None,
+    )
+    session.add(totp)
+    await session.flush()
+
+    # Request without temp_token (only totp_code and challenge_id)
+    response = await client.post(
+        f"{BASE}/verify",
+        json={"totp_code": "123456"},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_totp_verify_totp_code_7_digits(client):
+    """POST /auth/totp/verify with 7-digit totp_code should be rejected (schema allows 6-8 but service uses 6)."""
+    from app.core.security import hash_password
+    from app.models.user import User
+    from app.models.totp_secret import TotpSecret
+
+    user = User(
+        id=uuid.uuid4(),
+        email=f"flow_a_7digit_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+    )
+    session.add(user)
+    await session.flush()
+    totp = TotpSecret(
+        user_id=str(user.id),
+        secret="JBSWY3DPEHPK3PXP",
+        algorithm="SHA1",
+        digits=6,
+        period=30,
+        is_verified=True,
+        last_used_at=None,
+    )
+    session.add(totp)
+    await session.flush()
+
+    temp_token = create_temp_token(str(user.id))
+
+    # 7-digit code passes schema validation but service should reject
+    with patch(
+        "app.services.totp.TotpService.verify_totp_for_login",
+        new_callable=AsyncMock,
+        side_effect=UnauthorizedError("Invalid TOTP code"),
+    ):
+        response = await client.post(
+            f"{BASE}/verify",
+            json={"temp_token": temp_token, "totp_code": "1234567"},
+        )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_totp_verify_totp_code_8_digits(client):
+    """POST /auth/totp/verify with 8-digit totp_code should be rejected (schema allows 6-8 but service uses 6)."""
+    from app.core.security import hash_password
+    from app.models.user import User
+    from app.models.totp_secret import TotpSecret
+
+    user = User(
+        id=uuid.uuid4(),
+        email=f"flow_a_8digit_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+    )
+    session.add(user)
+    await session.flush()
+    totp = TotpSecret(
+        user_id=str(user.id),
+        secret="JBSWY3DPEHPK3PXP",
+        algorithm="SHA1",
+        digits=6,
+        period=30,
+        is_verified=True,
+        last_used_at=None,
+    )
+    session.add(totp)
+    await session.flush()
+
+    temp_token = create_temp_token(str(user.id))
+
+    # 8-digit code passes schema validation but service should reject
+    with patch(
+        "app.services.totp.TotpService.verify_totp_for_login",
+        new_callable=AsyncMock,
+        side_effect=UnauthorizedError("Invalid TOTP code"),
+    ):
+        response = await client.post(
+            f"{BASE}/verify",
+            json={"temp_token": temp_token, "totp_code": "12345678"},
+        )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_totp_verify_flow_b_replay_attack(
+    client, totp_service, sample_user_with_totp
+):
+    """Flow B: Using same OTP code twice returns 401 on second request."""
+    # Make TOTP unverified so enrollment verify works
+    totp = await totp_service._repo.get_by_user_id(str(sample_user_with_totp.id))
+    if totp:
+        totp.is_verified = False
+        await totp_service._repo.session.flush()
+
+    challenge_resp = totp_service.create_challenge(str(sample_user_with_totp.id))
+
+    # Mock first request to succeed
+    with patch(
+        "app.services.totp.TotpService.verify_totp_for_enrollment",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        response1 = await client.post(
+            f"{BASE}/verify",
+            json={
+                "challenge_id": str(challenge_resp.challenge_id),
+                "totp_code": "123456",
+            },
+        )
+        assert response1.status_code == 200
+
+    # Mock second request to fail with replay attack error
+    with patch(
+        "app.services.totp.TotpService.verify_totp_for_enrollment",
+        new_callable=AsyncMock,
+        side_effect=UnauthorizedError("TOTP code already used in current window"),
+    ):
+        response2 = await client.post(
+            f"{BASE}/verify",
+            json={
+                "challenge_id": str(challenge_resp.challenge_id),
+                "totp_code": "123456",
+            },
+        )
+        assert response2.status_code == 401
+        assert response2.json()["detail"] == "TOTP code already used in current window"
 
 
 # ── Request validation ────────────────────────────────────────────────────────
