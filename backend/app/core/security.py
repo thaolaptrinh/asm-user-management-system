@@ -13,13 +13,13 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
+    if not plain or not hashed:
+        return False
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def create_access_token(
-    subject: str, 
-    password_version: int = 1,
-    expires_delta: timedelta | None = None
+    subject: str, password_version: int = 1, expires_delta: timedelta | None = None
 ) -> str:
     delta = expires_delta or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     expire = datetime.now(UTC) + delta
