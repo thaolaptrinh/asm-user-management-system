@@ -33,8 +33,10 @@ def pytest_configure(config: pytest.Config) -> None:
 
     app.state.limiter.enabled = False
     from app.api.v1.routes.auth import limiter as auth_limiter
+    from app.api.v1.routes.totp import limiter as totp_limiter
 
     auth_limiter.enabled = False
+    totp_limiter.enabled = False
 
 
 @pytest_asyncio.fixture
