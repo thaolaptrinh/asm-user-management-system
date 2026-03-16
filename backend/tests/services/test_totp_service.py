@@ -51,6 +51,10 @@ async def test_generate_qr_code(
 @pytest.mark.asyncio
 async def test_get_otpauth_url(totp_service: TotpService, sample_user_with_totp):
     """Test OTPAuth URL generation."""
+    from urllib.parse import unquote
+
+    from app.core.config import settings
+
     secret = "JBSWY3DPEHPK3PXP"
     email = sample_user_with_totp.email
 
@@ -58,10 +62,8 @@ async def test_get_otpauth_url(totp_service: TotpService, sample_user_with_totp)
 
     assert url.startswith("otpauth://totp/")
     assert secret in url
-    # email may be URL-encoded in the otpauth URI
-    from urllib.parse import unquote
-
     assert email in unquote(url)
+    assert settings.APP_NAME in unquote(url)
 
 
 @pytest.mark.asyncio
