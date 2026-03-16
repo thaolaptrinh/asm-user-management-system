@@ -13,7 +13,7 @@ import pytest
 
 from app.core.config import settings
 from app.core.exceptions import ConflictError, UnauthorizedError
-from app.core.security import create_access_token, create_temp_token
+from app.core.security import create_access_token, create_temp_token, hash_password
 from app.schemas.totp import (
     TotpChallengeResponse,
     TotpEnrollResponse,
@@ -76,7 +76,45 @@ async def test_totp_enroll_success(client, totp_user_temp_headers):
     data = response.json()
     assert data["secret"] == "JBSWY3DPEHPK3PXP"
     assert data["qr_code"].startswith("data:image/png;base64,")
-    assert "otpauth_url" in data
+    assert data["otpauth_url"].startswith("otpauth://totp/")
+
+
+@pytest.mark.asyncio
+async def test_totp_enroll_invalid_token(client):
+    """POST /auth/totp/enroll returns 401 with invalid token."""
+    response = await client.post(
+        f"{BASE}/enroll", headers={"Authorization": "Bearer invalid-token"}
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_totp_enroll_stores_secret_with_is_verified_false(client, session):
+    """Verify TOTP secret is stored in database with is_verified=False."""
+    from app.models.user import User
+    from app.repositories.totp_secret import TotpSecretRepository
+
+    user_id = uuid.uuid4()
+    user = User(
+        id=user_id,
+        email=f"enroll_test_{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=hash_password("Password123"),
+        is_active=True,
+        is_superuser=False,
+    )
+    session.add(user)
+    await session.flush()
+
+    temp_token = create_temp_token(str(user.id))
+    headers = {"Authorization": f"Bearer {temp_token}"}
+
+    response = await client.post(f"{BASE}/enroll", headers=headers)
+    assert response.status_code == 200
+
+    repo = TotpSecretRepository(session)
+    totp = await repo.get_by_user_id(str(user_id))
+    assert totp is not None
+    assert totp.is_verified is False
 
 
 @pytest.mark.asyncio
