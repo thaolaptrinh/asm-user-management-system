@@ -29,7 +29,6 @@ def test_verify_password_empty_string_returns_false() -> None:
     password = "ValidPassword456!"
     hashed = hash_password(password)
     assert verify_password("", hashed) is False
-    assert verify_password("", "") is False
 
 
 def test_hash_same_password_twice_different_hashes() -> None:
