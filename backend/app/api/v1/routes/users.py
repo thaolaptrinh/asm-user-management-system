@@ -105,9 +105,9 @@ async def delete_user(
 ) -> Message:
     user = await user_repo.get_by_id(user_id)
     if user is None:
-        raise NotFoundError("User", user_id)
+        raise NotFoundError("User")
     await user_repo.delete(user)
-    return Message(message="User deleted")
+    return Message(message="User deleted successfully")
 
 
 @router.put(
