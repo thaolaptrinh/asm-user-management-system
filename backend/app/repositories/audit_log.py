@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit_log import AuditLog
@@ -7,8 +9,8 @@ from app.repositories.base import BaseRepository
 class AuditLogRepository(BaseRepository[AuditLog]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(AuditLog, session)
-    
-    async def create(
+
+    async def create_entry(
         self,
         user_id: str | None,
         action: str,
@@ -19,7 +21,8 @@ class AuditLogRepository(BaseRepository[AuditLog]):
     ) -> AuditLog:
         """Create an audit log entry."""
         import json
-        return await super().create(
+
+        return await self.create(
             user_id=user_id,
             action=action,
             ip_address=ip_address,

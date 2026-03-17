@@ -93,7 +93,9 @@ def send_email(email_to: str, subject: str, body: str) -> None:
         msg["From"] = f"{settings.MAIL_FROM_NAME} <{settings.MAIL_FROM_ADDRESS}>"
         msg["To"] = email_to
 
-        with smtplib.SMTP(settings.MAIL_HOST, settings.MAIL_PORT, timeout=10) as server:
+        mail_host = settings.MAIL_HOST
+        assert mail_host is not None, "MAIL_HOST must be set when mail_enabled is True"
+        with smtplib.SMTP(mail_host, settings.MAIL_PORT, timeout=10) as server:
             if settings.MAIL_USERNAME and settings.MAIL_PASSWORD:
                 server.login(settings.MAIL_USERNAME, settings.MAIL_PASSWORD)
             server.send_message(msg)

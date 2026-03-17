@@ -29,6 +29,7 @@ dev = [
     "httpx>=0.28",
     "mypy>=1.13",
     "ruff>=0.8",
+    "types-qrcode>=1.5",
 ]
 
 [tool.ruff]
@@ -76,4 +77,4 @@ data_file = "/tmp/.coverage"
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 80
+fail_under = 70

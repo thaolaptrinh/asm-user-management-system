@@ -1,13 +1,14 @@
 import uuid
 from collections.abc import Sequence
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import Base
+if TYPE_CHECKING:
+    from app.db.base import Base
 
-ModelT = TypeVar("ModelT", bound=Base)
+ModelT = TypeVar("ModelT", bound="Base")
 
 
 class BaseRepository(Generic[ModelT]):
@@ -46,9 +47,4 @@ class BaseRepository(Generic[ModelT]):
         return obj
 
     async def delete(self, obj: ModelT) -> None:
-        from sqlalchemy import delete as sql_delete
-
-        obj_id = getattr(obj, 'id', None)
-        # Use raw SQL DELETE to avoid detached object issues
-        stmt = sql_delete(self.model).where(self.model.id == obj_id)
-        await self.session.execute(stmt)
+        await self.session.delete(obj)
