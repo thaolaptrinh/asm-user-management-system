@@ -93,8 +93,8 @@ async def test_register_password_too_short_returns_422(client) -> None:
 
 @pytest.mark.asyncio
 async def test_register_password_too_long_returns_422(client) -> None:
-    """Test password too long (> 128 chars) returns 422."""
-    too_long_password = "a" * 129  # 129 characters, more than max 128
+    """Test password too long (> 64 chars) returns 422."""
+    too_long_password = "a" * 65  # 65 characters, more than max 64
     response = await client.post(
         f"{settings.API_V1_PREFIX}/auth/register",
         json={

@@ -22,11 +22,13 @@ const formSchema = z
     current_password: z
       .string()
       .min(1, { message: "Password is required" })
-      .min(8, { message: "Password must be at least 8 characters" }),
+      .min(8, { message: "Password must be at least 8 characters" })
+      .max(64, { message: "Password must not exceed 64 characters" }),
     new_password: z
       .string()
       .min(1, { message: "Password is required" })
-      .min(8, { message: "Password must be at least 8 characters" }),
+      .min(8, { message: "Password must be at least 8 characters" })
+      .max(64, { message: "Password must not exceed 64 characters" }),
     confirm_password: z
       .string()
       .min(1, { message: "Password confirmation is required" }),
