@@ -38,6 +38,7 @@ const formSchema = z
     password: z
       .string()
       .min(8, { message: "Password must be at least 8 characters" })
+      .max(64, { message: "Password must not exceed 64 characters" })
       .optional()
       .or(z.literal("")),
     confirm_password: z.string().optional(),
