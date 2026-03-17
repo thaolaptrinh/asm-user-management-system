@@ -47,7 +47,7 @@ class UserService:
     async def get_or_404(self, user_id: object) -> User:
         user = await self._repo.get_by_id(uuid.UUID(str(user_id)))
         if user is None:
-            raise NotFoundError("User", user_id)
+            raise NotFoundError("User", None)
         return user
 
     async def change_password(
