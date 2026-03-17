@@ -133,7 +133,7 @@ async def totp_repo(session: AsyncSession) -> TotpSecretRepository:
     return TotpSecretRepository(session)
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 def totp_service(totp_repo: TotpSecretRepository) -> TotpService:
     """Create TOTP service fixture."""
     return TotpService(totp_repo)
@@ -229,7 +229,7 @@ async def audit_repo(session: AsyncSession) -> AuditLogRepository:
     return AuditLogRepository(session)
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 def user_service(session: AsyncSession) -> UserService:
     """Create UserService fixture."""
     return UserService(UserRepository(session))
