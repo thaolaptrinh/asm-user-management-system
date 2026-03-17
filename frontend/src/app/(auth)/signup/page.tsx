@@ -23,7 +23,7 @@ import { PasswordInput } from "@/components/ui/password-input"
 const formSchema = z
   .object({
     email: z.string().email(),
-    full_name: z.string().min(1, { message: "Full Name is required" }),
+    full_name: z.string().optional(),
     password: z
       .string()
       .min(1, { message: "Password is required" })
