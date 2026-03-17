@@ -101,8 +101,9 @@ function CredentialsForm({
         password: data.password,
       })
       onDone(result?.temp_token ?? "")
-    } catch {
-      setError("Invalid email or password")
+    } catch(err: unknown) {
+      const detail = (err as { detail?: string })?.detail
+      setError(detail ?? "Something went wrong. Please try again.")
     }
   }
 
