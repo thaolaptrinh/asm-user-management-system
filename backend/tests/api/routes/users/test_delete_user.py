@@ -30,7 +30,7 @@ async def test_delete_user(client, superuser_token_headers, session):
         headers=superuser_token_headers,
     )
     assert response.status_code == 200
-    assert response.json()["message"] == "User deleted"
+    assert response.json()["message"] == "User deleted successfully"
 
     deleted_user = await user_repo.get_by_id(user.id)
     assert deleted_user is None
@@ -44,6 +44,7 @@ async def test_delete_user_not_exists(client, superuser_token_headers):
         headers=superuser_token_headers,
     )
     assert response.status_code == 404
+    assert response.json()["detail"] == "User not found"
 
 
 @pytest.mark.asyncio
@@ -54,3 +55,12 @@ async def test_delete_user_invalid_path(client, superuser_token_headers):
         headers=superuser_token_headers,
     )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_delete_user_unauthenticated(client):
+    """Test unauthenticated request returns 401."""
+    response = await client.delete(
+        f"{settings.API_V1_PREFIX}/users/{uuid.uuid4()}",
+    )
+    assert response.status_code == 401
