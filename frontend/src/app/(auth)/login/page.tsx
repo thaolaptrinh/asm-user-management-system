@@ -21,6 +21,7 @@ import { PasswordInput } from "@/components/ui/password-input"
 import { Button } from "@/components/ui/button"
 
 import { Copy, Check, Download } from "lucide-react"
+import { classifyTotpError } from "@/lib/totp-error"
 import { useLogin } from "@/hooks/useAuth"
 import {
   checkTotpStatusWithTempToken,
@@ -183,10 +184,12 @@ function TotpVerifyForm({
   tempToken,
   onUseRecovery,
   onCancel,
+  onExpiredToken,
 }: {
   tempToken: string
   onUseRecovery: () => void
   onCancel: () => void
+  onExpiredToken: (message: string) => void
 }) {
   const verifyMutation = useTotpVerifyLogin()
   const [error, setError] = useState<string | null>(null)
@@ -200,9 +203,14 @@ function TotpVerifyForm({
     setError(null)
     try {
       await verifyMutation.mutateAsync({ tempToken, totpCode: data.code })
-    } catch {
-      setError("Invalid or expired code. Try again.")
-      form.reset()
+    } catch (err) {
+      const kind = classifyTotpError(err)
+      if (kind === "expired") {
+        onExpiredToken("Session expired. Please log in again.")
+      } else {
+        setError("Invalid OTP code. Please try again.")
+        form.reset()
+      }
     }
   }
 
@@ -762,6 +770,10 @@ export default function LoginPage() {
             setStep({ name: "recovery", tempToken: step.tempToken })
           }
           onCancel={() => setStep({ name: "credentials" })}
+          onExpiredToken={(message) => {
+            setPostLoginError(message)
+            setStep({ name: "credentials" })
+          }}
         />
       )}
 
