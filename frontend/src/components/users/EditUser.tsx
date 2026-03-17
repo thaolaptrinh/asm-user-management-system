@@ -29,7 +29,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
 import useCustomToast from "@/hooks/useCustomToast"
-import { handleError } from "@/lib/utils"
+import { extractErrorMessage } from "@/lib/utils"
 
 const formSchema = z
   .object({
@@ -84,7 +84,15 @@ const EditUser = ({ user, onSuccess }: EditUserProps) => {
       setIsOpen(false)
       onSuccess()
     },
-    onError: handleError.bind(showErrorToast),
+    onError: (err: unknown) => {
+      const message = extractErrorMessage(err)
+      const status = (err as { status?: number })?.status
+      if (status === 409) {
+        form.setError("email", { message })
+      } else {
+        showErrorToast(message)
+      }
+    },
   })
 
   const onSubmit = (data: FormData) => {

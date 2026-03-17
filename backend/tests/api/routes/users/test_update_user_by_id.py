@@ -47,6 +47,7 @@ async def test_update_user_not_exists(client, superuser_token_headers):
         json=data,
     )
     assert response.status_code == 404
+    assert response.json()["detail"] == "User not found"
 
 
 @pytest.mark.asyncio
@@ -76,6 +77,7 @@ async def test_update_user_email_exists(client, superuser_token_headers, session
         json=data,
     )
     assert response.status_code == 409
+    assert response.json()["detail"] == "The user with this email already exists in the system"
 
 
 @pytest.mark.asyncio
