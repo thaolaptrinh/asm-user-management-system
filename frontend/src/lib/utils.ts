@@ -5,7 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-function extractErrorMessage(err: any): string {
+export function extractErrorMessage(err: any): string {
   const errDetail = err?.detail || err?.body?.detail
   if (Array.isArray(errDetail) && errDetail.length > 0) {
     return errDetail[0].msg
