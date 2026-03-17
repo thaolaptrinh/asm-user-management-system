@@ -31,7 +31,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     setupUnauthorizedInterceptor({
       queryClient,
       logout,
-      redirect: navigateToLogin,
+      redirect: () => navigateToLogin("session_expired"),
     })
   }, [queryClient, router])
 
