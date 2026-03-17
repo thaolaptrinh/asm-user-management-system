@@ -119,17 +119,15 @@ test("Sign up with mismatched passwords", async ({ page }) => {
   await expect(page.getByText("The passwords don't match")).toBeVisible()
 })
 
-test("Sign up with missing full name", async ({ page }) => {
-  const fullName = ""
+test("Sign up without full name succeeds", async ({ page }) => {
   const email = randomEmail()
   const password = randomPassword()
 
   await page.goto("/signup")
-
-  await fillForm(page, fullName, email, password, password)
+  await fillForm(page, "", email, password, password)
   await page.getByRole("button", { name: "Sign Up" }).click()
 
-  await expect(page.getByText("Full Name is required")).toBeVisible()
+  await expect(page).toHaveURL(/\/login/)
 })
 
 test("Sign up with missing email", async ({ page }) => {
