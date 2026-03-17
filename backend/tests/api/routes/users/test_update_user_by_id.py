@@ -34,6 +34,7 @@ async def test_update_user(client, superuser_token_headers, session):
     assert response.status_code == 200
     updated_user = response.json()
     assert updated_user["full_name"] == "Updated_full_name"
+    assert "updated_at" in updated_user
 
 
 @pytest.mark.asyncio
@@ -75,3 +76,42 @@ async def test_update_user_email_exists(client, superuser_token_headers, session
         json=data,
     )
     assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_update_user_invalid_email(client, superuser_token_headers, session):
+    """Test update user with invalid email format returns 422."""
+    user_repo = UserRepository(session)
+    user = await user_repo.create(
+        email=random_email(),
+        hashed_password=hash_password(random_lower_string()),
+        is_active=True,
+        is_superuser=False,
+    )
+
+    data = {"email": "not-a-valid-email"}
+    response = await client.patch(
+        f"{settings.API_V1_PREFIX}/users/{user.id}",
+        headers=superuser_token_headers,
+        json=data,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_user_unauthenticated(client, session):
+    """Test update user without authentication returns 401."""
+    user_repo = UserRepository(session)
+    user = await user_repo.create(
+        email=random_email(),
+        hashed_password=hash_password(random_lower_string()),
+        is_active=True,
+        is_superuser=False,
+    )
+
+    data = {"full_name": "Should Not Update"}
+    response = await client.patch(
+        f"{settings.API_V1_PREFIX}/users/{user.id}",
+        json=data,
+    )
+    assert response.status_code == 401
