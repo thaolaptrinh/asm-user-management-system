@@ -15,6 +15,7 @@ from app.schemas.common import Message, PaginatedResponse
 from app.schemas.user import (
     ChangePassword,
     UserCreate,
+    UserCreateResponse,
     UserPublic,
     UserUpdate,
     UserUpdateMe,
@@ -60,7 +61,7 @@ async def list_users(
 
 @router.post(
     "/",
-    response_model=UserPublic,
+    response_model=UserCreateResponse,
     status_code=201,
     operation_id="createUser",
     responses={409: {"description": "Email already registered", "model": Message}},
@@ -69,9 +70,9 @@ async def create_user(
     data: UserCreate,
     _: CurrentUser,
     user_service: UserServiceDep,
-) -> UserPublic:
+) -> UserCreateResponse:
     user = await user_service.create(data)
-    return UserPublic.model_validate(user)
+    return UserCreateResponse.model_validate(user)
 
 
 @router.get("/{user_id}", response_model=UserPublic, operation_id="getUser")

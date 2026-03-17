@@ -29,6 +29,17 @@ class UserUpdateMe(BaseModel):
 
 class UserPublic(UserBase):
     id: uuid.UUID
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UserCreateResponse(BaseModel):
+    id: uuid.UUID
+    email: EmailStr
+    full_name: str | None = None
+    is_active: bool
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -51,13 +62,6 @@ class ChangePassword(BaseModel):
 
     current_password: str = Field(min_length=8, max_length=64)
     new_password: str = Field(min_length=8, max_length=64)
-
-
-class ChangePassword(BaseModel):
-    """Schema for password change."""
-
-    current_password: str = Field(min_length=8, max_length=128)
-    new_password: str = Field(min_length=8, max_length=128)
 
     @field_validator("new_password")
     @classmethod
