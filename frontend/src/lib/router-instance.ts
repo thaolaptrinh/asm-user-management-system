@@ -9,15 +9,17 @@ export function setRouterInstance(router: ReturnType<typeof useRouter>) {
   routerInstance = router
 }
 
-export function navigateToLogin() {
+export function navigateToLogin(reason?: string) {
   if (typeof window === "undefined") return
 
   const currentPath = window.location.pathname
   if (currentPath === LOGIN_PATH) return
 
+  const target = reason ? `${LOGIN_PATH}?reason=${reason}` : LOGIN_PATH
+
   if (routerInstance) {
-    routerInstance.replace(LOGIN_PATH)
+    routerInstance.replace(target)
   } else {
-    window.location.replace(LOGIN_PATH)
+    window.location.replace(target)
   }
 }

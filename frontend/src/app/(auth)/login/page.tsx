@@ -707,6 +707,16 @@ function RegisteredBanner() {
   )
 }
 
+function SessionExpiredBanner() {
+  const searchParams = useSearchParams()
+  if (searchParams.get("reason") !== "session_expired") return null
+  return (
+    <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
+      Session expired. Please log in again.
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Main page — orchestrates multi-step flow
 // ---------------------------------------------------------------------------
@@ -746,6 +756,7 @@ export default function LoginPage() {
         <>
           <Suspense>
             <RegisteredBanner />
+            <SessionExpiredBanner />
           </Suspense>
           <CredentialsForm
             onDone={handleCredentialsDone}
