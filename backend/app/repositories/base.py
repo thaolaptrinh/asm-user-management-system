@@ -48,7 +48,13 @@ class BaseRepository(Generic[ModelT]):
     async def delete(self, obj: ModelT) -> None:
         from sqlalchemy import delete as sql_delete
 
-        obj_id = getattr(obj, 'id', None)
+        obj_id = getattr(obj, "id", None)
+        if obj_id is None:
+            raise ValueError(
+                f"Object of type {self.model.__name__} has no 'id' attribute"
+            )
+        # Get the primary key column from the model
+        pk_column = self.model.__table__.primary_key.columns[0]
         # Use raw SQL DELETE to avoid detached object issues
-        stmt = sql_delete(self.model).where(self.model.id == obj_id)
+        stmt = sql_delete(self.model).where(pk_column == obj_id)
         await self.session.execute(stmt)
