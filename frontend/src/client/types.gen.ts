@@ -369,6 +369,32 @@ export type UserCreate = {
 };
 
 /**
+ * UserCreateResponse
+ */
+export type UserCreateResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Full Name
+     */
+    full_name?: string | null;
+    /**
+     * Is Active
+     */
+    is_active: boolean;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
  * UserPublic
  */
 export type UserPublic = {
@@ -392,6 +418,14 @@ export type UserPublic = {
      * Id
      */
     id: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
 };
 
 /**
@@ -848,7 +882,7 @@ export type CreateUserResponses = {
     /**
      * Successful Response
      */
-    201: UserPublic;
+    201: UserCreateResponse;
 };
 
 export type CreateUserResponse = CreateUserResponses[keyof CreateUserResponses];

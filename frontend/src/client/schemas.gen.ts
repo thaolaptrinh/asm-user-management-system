@@ -64,13 +64,13 @@ export const ChangePasswordSchema = {
     properties: {
         current_password: {
             type: 'string',
-            maxLength: 128,
+            maxLength: 64,
             minLength: 8,
             title: 'Current Password'
         },
         new_password: {
             type: 'string',
-            maxLength: 128,
+            maxLength: 64,
             minLength: 8,
             title: 'New Password'
         }
@@ -485,7 +485,7 @@ export const UserCreateSchema = {
         },
         password: {
             type: 'string',
-            maxLength: 128,
+            maxLength: 64,
             minLength: 8,
             title: 'Password'
         }
@@ -496,6 +496,49 @@ export const UserCreateSchema = {
         'password'
     ],
     title: 'UserCreate'
+} as const;
+
+export const UserCreateResponseSchema = {
+    properties: {
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        email: {
+            type: 'string',
+            format: 'email',
+            title: 'Email'
+        },
+        full_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Full Name'
+        },
+        is_active: {
+            type: 'boolean',
+            title: 'Is Active'
+        },
+        created_at: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Created At'
+        }
+    },
+    type: 'object',
+    required: [
+        'id',
+        'email',
+        'is_active',
+        'created_at'
+    ],
+    title: 'UserCreateResponse'
 } as const;
 
 export const UserPublicSchema = {
@@ -531,12 +574,24 @@ export const UserPublicSchema = {
             type: 'string',
             format: 'uuid',
             title: 'Id'
+        },
+        created_at: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Created At'
+        },
+        updated_at: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Updated At'
         }
     },
     type: 'object',
     required: [
         'email',
-        'id'
+        'id',
+        'created_at',
+        'updated_at'
     ],
     title: 'UserPublic'
 } as const;
@@ -550,7 +605,7 @@ export const UserRegisterSchema = {
         },
         password: {
             type: 'string',
-            maxLength: 128,
+            maxLength: 64,
             minLength: 8,
             title: 'Password'
         },
@@ -583,7 +638,7 @@ export const UserResetPasswordTokenSchema = {
         },
         new_password: {
             type: 'string',
-            maxLength: 128,
+            maxLength: 64,
             minLength: 8,
             title: 'New Password'
         }
@@ -627,7 +682,7 @@ export const UserUpdateSchema = {
             anyOf: [
                 {
                     type: 'string',
-                    maxLength: 128,
+                    maxLength: 64,
                     minLength: 8
                 },
                 {
